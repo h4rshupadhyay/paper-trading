@@ -1,0 +1,19 @@
+name: paper-foundation-test
+services:
+  postgres:
+    image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+    environment:
+      POSTGRES_USER: paper_test_admin
+      POSTGRES_PASSWORD: paper_test_admin_only
+      POSTGRES_DB: paper_foundation_test_admin
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paper_test_admin -d paper_foundation_test_admin"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+    labels:
+      paper-trading.purpose: foundation-isolated-tests

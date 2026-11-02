@@ -1,0 +1,5 @@
+{
+  "name": "@paper/contracts", "version": "0.0.0", "private": true, "type": "module",
+  "exports": { "./foundation": { "types": "./src/foundation.ts", "default": "./dist/foundation.js" } },
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc" }
+}

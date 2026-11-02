@@ -1,0 +1,32 @@
+{
+  "name": "paper-trading-foundation",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/server",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=24.22.2 <25",
+    "npm": ">=11.19.1 <12"
+  },
+  "packageManager": "npm@11.19.1",
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces",
+    "build": "npm run build --workspaces",
+    "test:unit": "npm run test:unit --workspace @paper/server --",
+    "test:integration": "TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin npm run test:integration --workspace @paper/server --",
+    "test:foundation": "npm run test:unit && npm run test:integration",
+    "test:db:up": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml up --detach --wait",
+    "test:db:down": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml down",
+    "db:migrate": "npm run db:migrate --workspace @paper/server",
+    "start:api": "npm run start:api --workspace @paper/server"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "esbuild@0.28.2": true
+  }
+}
