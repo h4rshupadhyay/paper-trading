@@ -1,6 +1,6 @@
 # Greenfield PERN paper-trading design
 
-Date: 2 November 2026. Status: proposed design, awaiting user approval.
+Date: 2 November 2026. Status: authorized for completion by the user on 2 November 2026 (“okay then let’s do it”), following foundation integration. Provider enablement remains conditional on validation.
 
 ## Intent and scope
 
