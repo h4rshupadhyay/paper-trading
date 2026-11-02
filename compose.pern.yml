@@ -1,0 +1,81 @@
+name: paper-pern
+services:
+  db:
+    image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+    environment:
+      POSTGRES_USER: paper_admin
+      POSTGRES_DB: paper_pern
+      POSTGRES_PASSWORD: ${PAPER_ADMIN_PASSWORD:?Set PAPER_ADMIN_PASSWORD}
+      PAPER_OWNER_PASSWORD: ${PAPER_OWNER_PASSWORD:?Set PAPER_OWNER_PASSWORD}
+      PAPER_APP_PASSWORD: ${PAPER_APP_PASSWORD:?Set PAPER_APP_PASSWORD}
+    volumes:
+      - pern_data:/var/lib/postgresql/data
+      - ./deploy/pern/init-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U paper_admin -d paper_pern']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/pern/server.Dockerfile
+    command: [node, apps/server/dist/src/platform/migrate.js]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://paper_owner:${PAPER_OWNER_PASSWORD:?Set PAPER_OWNER_PASSWORD}@db:5432/paper_pern
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+  api:
+    build:
+      context: .
+      dockerfile: deploy/pern/server.Dockerfile
+    environment: &runtime
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: '3001'
+      DATABASE_URL: postgresql://paper_app:${PAPER_APP_PASSWORD:?Set PAPER_APP_PASSWORD}@db:5432/paper_pern
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      CSRF_SECRET: ${CSRF_SECRET:?Set CSRF_SECRET}
+      MARKET_PROVIDER: ${MARKET_PROVIDER:-yahoo}
+      TRUST_PROXY_HOPS: '1'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    stop_grace_period: 15s
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/pern/server.Dockerfile
+    command: [node, apps/server/dist/src/worker.js]
+    environment: *runtime
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 15s
+    healthcheck:
+      test: [CMD, node, --input-type=module, -e, "import pg from 'pg'; const p=new pg.Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000,query_timeout:3000,max:1});try{const r=await p.query(\"SELECT heartbeat_at > clock_timestamp()-interval '45 seconds' AS healthy FROM worker_status WHERE id='main'\");process.exitCode=r.rows[0]?.healthy?0:1}catch{process.exitCode=1}finally{await p.end()}"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+  web:
+    build:
+      context: .
+      dockerfile: deploy/pern/web.Dockerfile
+    ports:
+      - 127.0.0.1:${PERN_WEB_PORT:-3000}:80
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, --spider, -q, http://127.0.0.1/]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+volumes:
+  pern_data:
