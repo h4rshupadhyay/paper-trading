@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { tradingAPI, pendingOrdersAPI } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
@@ -14,7 +14,6 @@ import { useRegion, tickerCurrency } from '../context/RegionContext'
  */
 
 const PRODUCT_TYPES = [
-  { id: 'MIS', label: 'MIS' },
   { id: 'CNC', label: 'CNC' },
 ]
 
@@ -43,7 +42,8 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
 
-  const qty       = parseFloat(quantity) || 0
+  const attempt = useRef(null)
+  const qty       = Number(quantity) || 0
   const isBuy     = side === 'buy'
   const isMarket  = orderType === 'MARKET'
   const isStop    = orderType === 'STOP'       // SL-M: trigger only
@@ -53,15 +53,18 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (qty <= 0) { setError('Quantity must be positive'); return }
+    if (!/^\d+(\.\d{1,4})?$/.test(quantity) || qty <= 0) { setError('Quantity must be positive'); return }
 
     setLoading(true)
     setError(null)
     try {
+      const fingerprint=JSON.stringify({ticker,side,orderType,quantity,limitPrice,stopPrice,expiresAt})
+      if(attempt.current?.fingerprint!==fingerprint)attempt.current={fingerprint,key:crypto.randomUUID()}
+      const key=attempt.current.key
       if (isMarket) {
         if (!price) { setError('Price unavailable — try again'); setLoading(false); return }
         const fn       = isBuy ? tradingAPI.buy : tradingAPI.sell
-        const { data } = await fn(ticker, qty, price)
+        const { data } = await fn(ticker, quantity, key)
         await refreshUser()
         onSuccess?.(data)
         onClose?.()
@@ -77,17 +80,18 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
           ticker:     ticker.toUpperCase(),
           side:       side.toUpperCase(),
           order_type: orderType,
-          quantity:   qty,
+          quantity,
+          idempotencyKey:key,
         }
-        if ((isSL || orderType === 'LIMIT') && limitPrice) payload.limit_price = parseFloat(limitPrice)
-        if (triggerEnabled && stopPrice)                    payload.stop_price  = parseFloat(stopPrice)
-        if (expiresAt)                                      payload.expires_at  = expiresAt
+        if ((isSL || orderType === 'LIMIT') && limitPrice) payload.limit_price = limitPrice
+        if (triggerEnabled && stopPrice)                    payload.stop_price  = stopPrice
+        if (expiresAt)                                      payload.expires_at  = new Date(expiresAt).toISOString()
         await pendingOrdersAPI.place(payload)
         onSuccess?.({ message: `${ORDER_TYPES.find(t => t.id === orderType)?.label} order placed` })
         onClose?.()
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Order failed. Please try again.')
+      setError(err.response?.data?.error || err.message || 'Order failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -182,17 +186,7 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
               placeholder="0"
             />
           </div>
-          <div className="zk-field">
-            <label>Disclosed qty.</label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={disclosedQty}
-              onChange={(e) => setDisclosed(e.target.value)}
-              placeholder="0"
-            />
-          </div>
+
         </div>
 
         {/* ── More options (expander) ── */}
@@ -209,6 +203,7 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
           </div>
         )}
 
+        <p className="text-muted" style={{padding:"0 20px"}}>Full fills · cash positions only · zero fees and slippage. Pending orders reserve no cash or shares. Limits and stops use {priceCurr || "the instrument currency"}. Server prices determine execution.</p>
         {error && <p className="zk-error">{error}</p>}
 
         {/* ── Footer ── */}

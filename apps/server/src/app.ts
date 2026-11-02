@@ -1,3 +1,7 @@
+import { marketRoutes } from './modules/market-data/http.js';
+import { toolsRoutes } from './modules/user-tools/http.js';
+import { tradingRoutes } from './modules/trading/http.js';
+import { portfolioRoutes } from './modules/portfolio/http.js';
 import cookieParser from 'cookie-parser';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
@@ -10,7 +14,7 @@ import { readSchemaVersion } from './platform/migrate.js';
 export function createApp(deps: HttpDependencies): Express {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', false);
+  app.set('trust proxy', deps.config.trustProxyHops ?? false);
   app.use(requestContext(deps.logger));
   app.use(helmet());
   app.use(enforceOrigin(deps.config));
@@ -27,6 +31,10 @@ export function createApp(deps: HttpDependencies): Express {
     } catch { throw serviceUnavailable(); }
     response.json({ status: 'ok' });
   });
+  app.use('/api', tradingRoutes(deps));
+  app.use('/api', portfolioRoutes(deps));
+  app.use('/api', toolsRoutes(deps));
+  app.use('/api', marketRoutes(deps));
   app.use((_request, _response, next) => { next(new AppError(404, 'NOT_FOUND', 'Not found')); });
   app.use(errorHandler(deps.logger));
   return app;

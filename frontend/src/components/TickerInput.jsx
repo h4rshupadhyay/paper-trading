@@ -1,3 +1,4 @@
+import { stocksAPI } from '../services/api'
 /**
  * TickerInput — controlled text input with live ticker autocomplete.
  *
@@ -23,8 +24,8 @@ let _loadPromise  = null
 async function loadTickers() {
   if (_tickerCache) return _tickerCache
   if (_loadPromise)  return _loadPromise
-  _loadPromise = fetch('/api/stocks/tickers')
-    .then((r) => r.json())
+  _loadPromise = stocksAPI.catalogue()
+    .then(({data}) => data)
     .then((data) => { _tickerCache = Array.isArray(data) ? data : []; return _tickerCache })
     .catch(() => { _tickerCache = []; return [] })
   return _loadPromise

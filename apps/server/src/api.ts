@@ -1,3 +1,4 @@
+import { getProvider } from './modules/market-data/service.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
@@ -7,6 +8,7 @@ import { createSafeLogger } from './platform/logging.js';
 
 export async function startApi(): Promise<void> {
   const config = loadConfig(process.env);
+  getProvider();
   const logger = createSafeLogger();
   const pool = createPool(config.databaseUrl);
   pool.on('error', () => { logger.error('database_unavailable', { code: 'SERVICE_UNAVAILABLE' }); });

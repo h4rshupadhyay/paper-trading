@@ -5,14 +5,15 @@ import type { Pool } from 'pg';
 import { createPool } from './db.js';
 
 const migrationLock = 1480963202;
-const latestVersion = 1;
+export const latestVersion = 4;
+const files = ['001_foundation.sql', '002_market.sql', '003_tools.sql', '004_trading.sql'];
 
-async function foundationSql(): Promise<string> {
-  try { return await readFile(new URL('../../migrations/001_foundation.sql', import.meta.url), 'utf8'); }
+async function migrationSql(filename: string): Promise<string> {
+  try { return await readFile(new URL(`../../migrations/${filename}`, import.meta.url), 'utf8'); }
   catch (error) {
     // tsc preserves src/platform beneath dist; SQL remains in the server root.
     if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
-    return readFile(new URL('../../../migrations/001_foundation.sql', import.meta.url), 'utf8');
+    return readFile(new URL(`../../../migrations/${filename}`, import.meta.url), 'utf8');
   }
 }
 
@@ -23,9 +24,10 @@ export async function readSchemaVersion(pool: Pool): Promise<number> {
   return result.rows[0]!.version;
 }
 
-export async function migrate(pool: Pool): Promise<void> {
+export async function migrate(pool: Pool, targetVersion = latestVersion): Promise<void> {
   // A pool.query lock could be acquired and released on different sessions.
   // Hold one client and a transaction-scoped advisory lock through all DDL.
+  if (!Number.isInteger(targetVersion) || targetVersion < 1 || targetVersion > latestVersion) throw new Error('Unsupported migration target');
   const client = await pool.connect();
   let discard = false;
   try {
@@ -38,10 +40,10 @@ export async function migrate(pool: Pool): Promise<void> {
     )`);
     const result = await client.query<{ version: number }>('SELECT COALESCE(MAX(version), 0) AS version FROM public.schema_migrations');
     const version = result.rows[0]!.version;
-    if (version > latestVersion) throw new Error('Database schema is newer than this migration runner');
-    if (version === 0) {
-      await client.query(await foundationSql());
-      await client.query('INSERT INTO public.schema_migrations(version) VALUES ($1)', [latestVersion]);
+    if (version > targetVersion) throw new Error('Database schema is newer than this migration runner');
+    for (let next = version + 1; next <= targetVersion; next++) {
+      await client.query(await migrationSql(files[next - 1]!));
+      await client.query('INSERT INTO public.schema_migrations(version) VALUES ($1)', [next]);
     }
     await client.query('COMMIT');
   } catch (error) {

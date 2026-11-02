@@ -1,69 +1,28 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { authAPI } from '../services/api'
-
-const AuthContext = createContext(null)
-
-export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
-  })
-  const [token, setToken]     = useState(() => localStorage.getItem('token'))
-  const [loading, setLoading] = useState(true)
-
-  // Verify token on mount
-  useEffect(() => {
-    if (token) {
-      authAPI.me()
-        .then(({ data }) => setUser(data))
-        .catch(() => { logout() })
-        .finally(() => setLoading(false))
-    } else {
-      setLoading(false)
-    }
-  }, []) // eslint-disable-line
-
-  const login = useCallback(async (username, password) => {
-    const { data } = await authAPI.login(username, password)
-    localStorage.setItem('token', data.token)
-    localStorage.setItem('user', JSON.stringify({
-      user_id:  data.user_id,
-      username: data.username,
-      balance:  data.balance,
-    }))
-    setToken(data.token)
-    setUser({ user_id: data.user_id, username: data.username, balance: data.balance })
-    return data
-  }, [])
-
-  const register = useCallback(async (username, email, password) => {
-    const { data } = await authAPI.register(username, email, password)
-    return data
-  }, [])
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setToken(null)
-    setUser(null)
-  }, [])
-
-  const refreshUser = useCallback(async () => {
-    try {
-      const { data } = await authAPI.me()
-      setUser(data)
-      localStorage.setItem('user', JSON.stringify(data))
-    } catch (_) {}
-  }, [])
-
-  return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
-  )
+import {createContext,useState,useEffect,useCallback,useContext} from 'react'
+import {authAPI} from '../services/api'
+const AuthContext=createContext(null)
+export function AuthProvider({children}) {
+  const [user,setUser]=useState(null),[loading,setLoading]=useState(true)
+  const refreshUser=useCallback(async()=>{
+    const [{data:identity},{data:account}]=await Promise.all([authAPI.me(),authAPI.account()])
+    const next={...identity.user,user_id:identity.user.id,balance:account.account.cashBalance}
+    setUser(next);return next
+  },[])
+  useEffect(()=>{
+    localStorage.removeItem('token');localStorage.removeItem('user')
+    const clear=()=>setUser(null)
+    window.addEventListener('paper:unauthenticated',clear)
+    refreshUser().catch(()=>setUser(null)).finally(()=>setLoading(false))
+    return()=>window.removeEventListener('paper:unauthenticated',clear)
+  },[refreshUser])
+  const login=useCallback(async(username,password)=>{
+    await authAPI.login(username,password);const next=await refreshUser()
+    window.dispatchEvent(new Event('paper:authenticated'));return next
+  },[refreshUser])
+  const register=useCallback(async(username,email,password)=>(await authAPI.register(username,email,password)).data,[])
+  const logout=useCallback(async()=>{
+    try{await authAPI.logout();setUser(null)}catch(error){if(error.response?.status===401)setUser(null);else throw error}
+  },[])
+  return <AuthContext.Provider value={{user,loading,login,register,logout,refreshUser}}>{children}</AuthContext.Provider>
 }
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
-}
+export function useAuth(){const context=useContext(AuthContext);if(!context)throw Error('AuthProvider required');return context}

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Principal } from '@paper/contracts/foundation';
 import type { ErrorRequestHandler, Request, RequestHandler, Response } from 'express';
 import type { Pool } from 'pg';
-import { authenticate } from '../modules/identity/sessions.js';
+import { verifyCsrf, authenticate } from '../modules/identity/sessions.js';
 import type { Config } from './config.js';
 import { AppError } from './errors.js';
 import type { SafeLogger } from './logging.js';
@@ -18,6 +18,15 @@ export async function requireSession(pool: Pool, request: Request): Promise<{ pr
   const token = sessionToken(request);
   if (!token) throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
   return { principal: await authenticate(pool, token), token };
+}
+
+
+export async function requireMutation(pool: Pool, request: Request, config: Config): Promise<{ principal: Principal; token: string }> {
+  const session = await requireSession(pool, request);
+  if (!verifyCsrf(session.token, request.get('X-CSRF-Token') ?? '', config.csrfSecret)) {
+    throw new AppError(403, 'CSRF_INVALID', 'Invalid CSRF token');
+  }
+  return session;
 }
 
 export function requestContext(logger: SafeLogger): RequestHandler {
@@ -85,6 +94,9 @@ export function errorHandler(logger: SafeLogger): ErrorRequestHandler {
       safe = new AppError(413, 'BODY_TOO_LARGE', 'Request body too large');
     } else if (typeof error === 'object' && error !== null && 'type' in error && error.type === 'entity.parse.failed') {
       safe = new AppError(400, 'INVALID_JSON', 'Invalid JSON');
+    } else if (typeof error === 'object' && error !== null && 'type' in error
+      && ['charset.unsupported', 'encoding.unsupported'].includes(String(error.type))) {
+      safe = new AppError(415, 'UNSUPPORTED_ENCODING', 'Unsupported request encoding');
     } else if (unavailable(error)) safe = serviceUnavailable();
     else safe = new AppError(500, 'INTERNAL_ERROR', 'Internal server error');
     const requestId: string = response.locals.requestId;

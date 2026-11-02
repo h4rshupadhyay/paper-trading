@@ -68,7 +68,7 @@ function AreaTooltip({ active, payload, label, formatCurrency }) {
 }
 
 export default function Analytics() {
-  const { formatCurrency, formatPrice, toUSD, region } = useRegion()
+  const { formatCurrency, region } = useRegion()
 
   const [portfolio,     setPortfolio]     = useState(null)
   const [snapshots,     setSnapshots]     = useState([])
@@ -103,30 +103,30 @@ export default function Analytics() {
 
   // ── Derived data ─────────────────────────────────────────────
 
-  const holdings = portfolio?.holdings || []
+  const holdings = portfolio?.quality==='incomplete' ? [] : portfolio?.holdings || []
 
   // Helper: format a value tied to a specific ticker's native currency
-  const fmtH = (n, ticker) => formatPrice(n, { from: tickerCurrency(ticker) })
+  const fmtH = (n) => formatCurrency(n)
 
-  // Sector allocation — sum in USD then display in region currency
+  // Sector allocation — aggregate INR values, then format for display
   const sectorMap = {}
   for (const h of holdings) {
     const s = h.sector || 'Other'
-    const inUSD = toUSD(h.market_value || 0, tickerCurrency(h.ticker))
-    sectorMap[s] = (sectorMap[s] || 0) + inUSD
+    const baseValue = (h.market_value ?? 0)
+    sectorMap[s] = (sectorMap[s] || 0) + baseValue
   }
-  // Store as USD internally; formatPrice will convert to display currency
+  // Store chart values in the account currency (INR)
   const sectorData = Object.entries(sectorMap)
-    .map(([name, value]) => ({ name, value: +value.toFixed(2), currency: 'USD' }))
+    .map(([name, value]) => ({ name, value: +value.toFixed(2), currency: 'INR' }))
     .sort((a, b) => b.value - a.value)
 
-  // Cash vs holdings allocation (in USD for the pie)
-  const holdingsUSD = holdings.reduce((s, h) =>
-    s + toUSD(h.market_value || 0, tickerCurrency(h.ticker)), 0)
-  const cashUSD = toUSD(portfolio?.cash_balance || 0, 'USD')
+  // Cash vs holdings allocation in INR
+  const holdingsINR = holdings.reduce((s, h) =>
+    s + (h.market_value ?? 0), 0)
+  const cashINR = (portfolio?.cash_balance ?? 0)
   const allocationData = portfolio ? [
-    { name: 'Holdings', value: +holdingsUSD.toFixed(2) },
-    { name: 'Cash',     value: +cashUSD.toFixed(2) },
+    { name: 'Holdings', value: +holdingsINR.toFixed(2) },
+    { name: 'Cash',     value: +cashINR.toFixed(2) },
   ] : []
 
   // Win / loss breakdown
@@ -161,6 +161,7 @@ export default function Analytics() {
   return (
     <div className="page-layout">
       <Header title="Analytics" />
+      {portfolio?.quality && <p className="text-muted" style={{padding:"12px 24px"}}>Valuation: {portfolio.quality}. Values and allocation use the INR account currency; P/L includes FX changes.</p>}
 
       <main className="page-content">
 
@@ -252,7 +253,7 @@ export default function Analytics() {
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tickFormatter={(v) => `${region.symbol}${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={(v) => formatCurrency(v, {compact:true})}
                   tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   tickLine={false} axisLine={false} width={55}
                 />
@@ -296,7 +297,7 @@ export default function Analytics() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v) => [formatPrice(v, { from: 'USD' }), 'Value']}
+                        formatter={(v) => [formatCurrency(v), 'Value']}
                         contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6 }}
                       />
                     </PieChart>
@@ -310,7 +311,7 @@ export default function Analytics() {
                           <span className="sector-dot" style={{ background: COLORS[i % COLORS.length] }} />
                           <span className="sector-name">{s.name}</span>
                           <span className="sector-share text-muted">{share}%</span>
-                          <span className="sector-value fw-medium">{formatPrice(s.value, { from: 'USD', compact: true })}</span>
+                          <span className="sector-value fw-medium">{formatCurrency(s.value, {compact:true})}</span>
                         </li>
                       )
                     })}
@@ -339,7 +340,7 @@ export default function Analytics() {
                     <Cell fill="#00b386" />
                   </Pie>
                   <Tooltip
-                    formatter={(v) => [formatPrice(v, { from: 'USD' }), '']}
+                    formatter={(v) => [formatCurrency(v), '']}
                     contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6 }}
                   />
                   <Legend
@@ -351,7 +352,7 @@ export default function Analytics() {
                 {allocationData.map((a) => (
                   <div key={a.name} className="composition-stat">
                     <span className="text-muted" style={{ fontSize: '0.78rem' }}>{a.name}</span>
-                    <span className="fw-medium">{formatPrice(a.value, { from: 'USD' })}</span>
+                    <span className="fw-medium">{formatCurrency(a.value)}</span>
                   </div>
                 ))}
               </div>

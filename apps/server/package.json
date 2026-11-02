@@ -9,7 +9,8 @@
     "test:unit": "vitest run --project unit --passWithNoTests",
     "test:integration": "vitest run --project integration",
     "db:migrate": "tsx src/platform/migrate.ts",
-    "start:api": "node dist/src/api.js"
+    "start:api": "node dist/src/api.js",
+    "start:worker": "node dist/src/worker.js"
   },
   "dependencies": {
     "@paper/contracts": "0.0.0",

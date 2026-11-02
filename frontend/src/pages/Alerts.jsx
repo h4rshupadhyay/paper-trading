@@ -65,8 +65,8 @@ export default function Alerts() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setCreateError(null)
-    const price = parseFloat(targetPrice)
-    if (!ticker.trim() || isNaN(price) || price <= 0) {
+    const price = targetPrice
+    if (!ticker.trim() || !/^\d+(\.\d{1,8})?$/.test(price) || Number(price) <= 0) {
       setCreateError('Fill in all fields correctly')
       return
     }

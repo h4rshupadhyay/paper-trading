@@ -62,7 +62,7 @@ function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
           interval="preserveStartEnd"
         />
         <YAxis
-          tickFormatter={(v) => `${region.symbol}${(v / 1000).toFixed(0)}k`}
+          tickFormatter={(v) => formatCurrency(v, {compact:true})}
           tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           tickLine={false} axisLine={false} width={60}
         />
@@ -125,6 +125,7 @@ export default function Dashboard() {
 
       <main className="page-content">
         {/* Summary stats */}
+        <p className="text-muted">Valuation: {portfolio?.quality || "loading"}. P/L is in INR and includes FX changes. Missing observations remain unavailable.</p>
         <section className="stats-grid">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -214,11 +215,11 @@ export default function Dashboard() {
                       <td>{h.quantity}</td>
                       <td>{fmtp(h.avg_buy_price, h.ticker)}</td>
                       <td>{fmtp(h.current_price, h.ticker)}</td>
-                      <td>{fmtp(h.market_value,  h.ticker)}</td>
+                      <td>{fmt(h.market_value)}</td>
                       <td>
                         {h.pl != null ? (
                           <span className={h.pl >= 0 ? 'pos' : 'neg'}>
-                            {h.pl >= 0 ? '+' : ''}{fmtp(h.pl, h.ticker)}
+                            {h.pl >= 0 ? '+' : ''}{fmt(h.pl)}
                             <small> ({h.pl_pct >= 0 ? '+' : ''}{h.pl_pct?.toFixed(2)}%)</small>
                           </span>
                         ) : '—'}

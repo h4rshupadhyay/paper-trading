@@ -8,8 +8,8 @@ export default defineConfig({
     host: '0.0.0.0',   // needed so Docker can expose the port
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:5000',
-        changeOrigin: true,
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:3001',
+        changeOrigin: false,
       },
     },
   },

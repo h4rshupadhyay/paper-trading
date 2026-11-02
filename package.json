@@ -20,9 +20,14 @@
     "test:db:up": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml up --detach --wait",
     "test:db:down": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml down",
     "db:migrate": "npm run db:migrate --workspace @paper/server",
-    "start:api": "npm run start:api --workspace @paper/server"
+    "start:api": "npm run start:api --workspace @paper/server",
+    "test:web": "node --test frontend/test/*.test.js",
+    "test:e2e": "npm run build && TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin npm exec --workspace @paper/server -- tsx test/browser.e2e.ts",
+    "build:web": "npm run build --prefix frontend",
+    "start:worker": "npm run start:worker --workspace @paper/server"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "typescript": "7.0.2"
   },
   "allowScripts": {

@@ -2,9 +2,10 @@ export type Config = {
   nodeEnv: 'development' | 'test' | 'production';
   port: number;
   databaseUrl: string;
-  expectedSchemaVersion: 1;
+  expectedSchemaVersion: number;
   publicOrigin: string;
   csrfSecret: string;
+  trustProxyHops?: 1;
 };
 
 function invalid(field: string): never {
@@ -39,5 +40,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
   const csrfSecret = env.CSRF_SECRET;
   if (!csrfSecret || !csrfSecret.trim() || Buffer.byteLength(csrfSecret, 'utf8') < 32) invalid('CSRF_SECRET');
 
-  return { nodeEnv, port, databaseUrl, expectedSchemaVersion: 1, publicOrigin, csrfSecret };
+  if (env.TRUST_PROXY_HOPS !== undefined && env.TRUST_PROXY_HOPS !== '1') invalid('TRUST_PROXY_HOPS');
+  return { ...(env.TRUST_PROXY_HOPS === '1' ? {trustProxyHops: 1 as const} : {}), nodeEnv, port, databaseUrl, expectedSchemaVersion: 4, publicOrigin, csrfSecret };
 }

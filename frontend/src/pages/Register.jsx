@@ -23,8 +23,8 @@ export default function Register() {
       setError("Passwords don't match")
       return
     }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (new TextEncoder().encode(form.password).length < 12 || new TextEncoder().encode(form.password).length > 72) {
+      setError('Password must be 12–72 UTF-8 bytes')
       return
     }
 
@@ -61,7 +61,7 @@ export default function Register() {
           <Activity size={28} strokeWidth={2.5} className="brand-icon" />
           <span className="brand-name">PaperTrade</span>
         </div>
-        <p className="auth-tagline">Start with $100,000 in virtual cash.</p>
+        <p className="auth-tagline">Start with ₹10,00,000 in virtual cash.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
@@ -89,7 +89,7 @@ export default function Register() {
             <input
               id="password" name="password" type="password"
               className="form-input" value={form.password}
-              onChange={handleChange} placeholder="Min 6 characters"
+              onChange={handleChange} placeholder="12–72 UTF-8 bytes"
               autoComplete="new-password" required
             />
           </div>

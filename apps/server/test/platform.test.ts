@@ -32,7 +32,7 @@ describe('runtime configuration', () => {
 
   it('returns only runtime configuration with a byte-counted secret', () => {
     expect(loadConfig({ ...validEnv, CSRF_SECRET: 'é'.repeat(16), MIGRATION_DATABASE_URL: 'must-not-escape' })).toEqual({
-      nodeEnv: 'test', port: 3001, databaseUrl: validEnv.DATABASE_URL, expectedSchemaVersion: 1,
+      nodeEnv: 'test', port: 3001, databaseUrl: validEnv.DATABASE_URL, expectedSchemaVersion: 4,
       publicOrigin: 'http://localhost:5173', csrfSecret: 'é'.repeat(16),
     });
   });

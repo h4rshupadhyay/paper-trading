@@ -36,7 +36,7 @@ export default function Orders() {
 
   useEffect(() => { fetchOrders(page) }, [page]) // eslint-disable-line
 
-  const { formatPrice } = useRegion()
+  const { formatPrice, formatCurrency } = useRegion()
   const fmt = (n, ticker) => formatPrice(n, { from: tickerCurrency(ticker) })
 
   const fmtDate = (iso) => {
@@ -53,8 +53,8 @@ export default function Orders() {
         <section className="card">
           <div className="card-header">
             <div>
-              <h2 className="card-title">All Transactions</h2>
-              <p className="card-sub">{total} total orders</p>
+              <h2 className="card-title">All Orders</h2>
+              <p className="card-sub">{total} loaded orders</p>
             </div>
             <button className="icon-btn" onClick={() => fetchOrders(page)} title="Refresh">
               <RefreshCw size={15} />
@@ -78,6 +78,7 @@ export default function Orders() {
                       <th>#</th>
                       <th>Type</th>
                       <th>Stock</th>
+                      <th>Status</th>
                       <th>Qty</th>
                       <th>Price</th>
                       <th>Total</th>
@@ -100,9 +101,10 @@ export default function Orders() {
                             <span className="company-name">{o.company_name}</span>
                           </div>
                         </td>
+                        <td title={o.rejection_reason || ""}>{o.status}</td>
                         <td>{o.quantity}</td>
                         <td>{fmt(o.price, o.ticker)}</td>
-                        <td className="fw-medium">{fmt(o.total_amount, o.ticker)}</td>
+                        <td className="fw-medium">{formatCurrency(o.total_amount)}</td>
                         <td className="text-muted">{fmtDate(o.time)}</td>
                         <td>
                           <button

@@ -6,7 +6,7 @@ import TickerInput from '../components/TickerInput'
 import { pendingOrdersAPI, stocksAPI } from '../services/api'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
-const STATUS_TABS = ['OPEN', 'FILLED', 'CANCELLED']
+const STATUS_TABS = ['OPEN', 'TRIGGERED', 'FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED']
 
 const STATUS_ICON = {
   OPEN:      <Clock size={14} style={{ color: 'var(--yellow)' }} />,

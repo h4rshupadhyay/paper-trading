@@ -153,9 +153,9 @@ describe('protected HTTP account slice', () => {
   it('keeps liveness independent of storage and exposes safe readiness schema failures without migrating', async () => {
     expect((await request(app).get('/api/health/live')).body).toEqual({ status: 'ok' });
     expect((await request(app).get('/api/health/ready')).body).toEqual({ status: 'ok' });
-    await harness.ownerPool.query('UPDATE schema_migrations SET version=2');
+    await harness.ownerPool.query('UPDATE schema_migrations SET version=5 WHERE version=4');
     safeError(await request(app).get('/api/health/ready'), 503, 'SERVICE_UNAVAILABLE');
-    expect((await harness.ownerPool.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: 2 }]);
+    expect((await harness.ownerPool.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 5 }]);
     await harness.ownerPool.query('DROP TABLE schema_migrations');
     safeError(await request(app).get('/api/health/ready'), 503, 'SERVICE_UNAVAILABLE');
     expect((await request(app).get('/api/health/live')).status).toBe(200);

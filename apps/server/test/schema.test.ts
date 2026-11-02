@@ -30,28 +30,28 @@ async function opening(accountId: string, sequence = '1', amount = '1000000.00',
 describe('versioned migrations', () => {
   it('reads an unmigrated database without changing it, then applies version 1 exactly once', async () => {
     expect(await readSchemaVersion(harness.appPool)).toBe(0);
-    await migrate(harness.ownerPool);
+    await migrate(harness.ownerPool, 1);
     const id = await user();
-    await migrate(harness.ownerPool);
+    await migrate(harness.ownerPool, 1);
     expect(await readSchemaVersion(harness.appPool)).toBe(1);
     expect((await harness.appPool.query('SELECT id FROM users')).rows).toEqual([{ id }]);
     expect((await harness.ownerPool.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: 1 }]);
   });
 
   it('serializes concurrent migration calls on dedicated connections', async () => {
-    await Promise.all([migrate(harness.ownerPool), migrate(harness.ownerPool)]);
+    await Promise.all([migrate(harness.ownerPool, 1), migrate(harness.ownerPool, 1)]);
     expect(await Promise.all([readSchemaVersion(harness.ownerPool), readSchemaVersion(harness.appPool)])).toEqual([1, 1]);
     expect(harness.ownerPool.idleCount).toBe(harness.ownerPool.totalCount);
   });
 
   it('rolls back all DDL and the version on failure, releases the lock and permits retry', async () => {
     await harness.ownerPool.query('CREATE TABLE sessions (probe integer)');
-    await expect(migrate(harness.ownerPool)).rejects.toMatchObject({ code: '42P07' });
+    await expect(migrate(harness.ownerPool, 1)).rejects.toMatchObject({ code: '42P07' });
     expect((await harness.ownerPool.query("SELECT to_regclass('schema_migrations') AS versions, to_regclass('accounts') AS accounts, to_regclass('users') AS users, to_regclass('watchlist_folders') AS folders")).rows)
       .toEqual([{ versions: null, accounts: null, users: null, folders: null }]);
     expect(await readSchemaVersion(harness.ownerPool)).toBe(0);
     await harness.ownerPool.query('DROP TABLE sessions');
-    await migrate(harness.ownerPool);
+    await migrate(harness.ownerPool, 1);
     expect(await readSchemaVersion(harness.appPool)).toBe(1);
     expect(harness.ownerPool.idleCount).toBe(harness.ownerPool.totalCount);
   });
@@ -71,7 +71,7 @@ describe('versioned migrations', () => {
 
 // Removing SQL constraints/grants would admit the invalid writes below.
 describe('foundation constraints and runtime privileges', () => {
-  beforeEach(async () => { await migrate(harness.ownerPool); });
+  beforeEach(async () => { await migrate(harness.ownerPool, 1); });
 
   it.each([
     ['NaN', '23514'], ['-0.01', '23514'], ['1000000000000000000.00', '22003'],
