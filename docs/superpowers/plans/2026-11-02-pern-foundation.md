@@ -10,7 +10,7 @@
 
 **Spec:** [Proposed PERN design](../specs/2026-11-02-paper-trading-pern-design.md), [canonical language](../../../GLOSSARY.md), [historical audit](../../PERN_MIGRATION_AUDIT.md).
 
-**Status:** Foundation implementation authorized by the user with “let’s start”. All seven tasks are implemented and task-reviewed. Primary verification passed 20 unit + 92 integration tests, typecheck and build. The final SOL whole-branch review is complete with no blocking findings and one deferred minor HTTP error-mapping follow-up. The isolated test project is stopped. Branch integration awaits the user’s choice; later milestones remain separate work.
+**Status:** Foundation implementation authorized by the user with “let’s start”. All seven tasks are implemented and task-reviewed. Primary verification passed 20 unit + 92 integration tests, typecheck and build. The final SOL whole-branch review is complete with no blocking findings and one deferred minor HTTP error-mapping follow-up. The isolated test project is stopped. The user selected local integration; the foundation is merged into `main` and the feature worktree/branch are removed; later milestones remain separate work.
 
 ## Global Constraints
 

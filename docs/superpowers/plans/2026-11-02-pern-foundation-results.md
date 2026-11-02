@@ -1,6 +1,6 @@
 # PERN foundation execution results
 
-Date: 2 November 2026. Branch: `feat/pern-foundation`. Scope: M1 foundation only; final whole-branch SOL review accepted, integration choice pending.
+Date: 2 November 2026. Branch: `feat/pern-foundation`. Scope: M1 foundation only; final whole-branch SOL review accepted and locally integrated into `main`.
 
 ## Delivered
 
@@ -51,3 +51,9 @@ Deferred minor: `apps/server/src/platform/http.ts:84` maps body-parser `charset.
 Review scope ruling: accept the reviewer's exclusions of market/trading/worker/folder CRUD/frontend work, distributed throttling, database replacement/power-loss/backup guarantees, legacy route compatibility and Oracle data migration. These are explicitly outside M1 or constrained to a single API process. Cost if mistaken: M1 could be mistaken for a complete migration or production durability/scaling acceptance; those claims are expressly not made, and the later milestones still require separate plans and checks.
 
 `npm run test:db:down` exited zero and removed only the `paper-foundation-test` container/network. The feature branch and worktree remain available. No merge, push, production deployment or legacy runtime change was performed.
+
+## Local integration
+
+On 2 November 2026, the user selected option 1 (local merge). `main` was already up to date with `origin/main`; `git merge --ff-only feat/pern-foundation` advanced it to `e11a74e`. After a clean `npm ci` in the main checkout, `npm run typecheck` and `npm run test:foundation` both exited zero: 20 unit tests, 92 integration tests and the workspace build passed. The checks used the pinned Node 24.22.2/npm 11.19.1 runtime.
+
+The isolated test project was stopped, and the fully merged feature worktree and branch were removed. No changes were pushed. The preceding handoff paragraph records the state before this user-authorized integration.
