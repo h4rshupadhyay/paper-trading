@@ -81,6 +81,17 @@ CREATE TABLE public.sessions (
 );
 CREATE INDEX sessions_user_id ON public.sessions(user_id);
 
+-- Login needs an active-user row lock while runtime retains no user UPDATE grant.
+-- Return only safe identity columns; never let the caller provide executable SQL.
+CREATE FUNCTION public.lock_active_user(p_user_id uuid)
+RETURNS TABLE (id uuid, username text, email text)
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = pg_catalog AS $$
+  SELECT u.id,u.username,u.email FROM public.users u
+  WHERE u.id=p_user_id AND u.active FOR UPDATE OF u;
+$$;
+REVOKE ALL ON FUNCTION public.lock_active_user(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.lock_active_user(uuid) TO paper_app;
+
 REVOKE ALL ON TABLE public.users, public.accounts, public.cash_movements,
   public.watchlist_folders, public.sessions, public.schema_migrations FROM PUBLIC, paper_app;
 GRANT SELECT, INSERT ON public.users, public.accounts, public.cash_movements TO paper_app;
