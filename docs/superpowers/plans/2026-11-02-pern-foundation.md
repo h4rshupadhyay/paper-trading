@@ -1,16 +1,16 @@
 # PERN Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 **Goal:** Deliver one fresh PostgreSQL-backed slice: register a user atomically with an INR account, opening cash movement and default folder; authenticate with revocable sessions; read the owned account.
 
 **Architecture:** A TypeScript Express application uses focused identity/accounts modules and one checked-out `pg` client per transaction. SQL constraints and a restricted runtime role protect persistence; the HTTP layer owns validation and security middleware, while modules own business transactions. Existing React, Python, Oracle databases and volumes remain untouched.
 
-**Tech Stack:** Node LTS, TypeScript, Express, `pg`, SQL migrations, bcrypt, Zod, Vitest and Supertest; npm workspaces. Verify maintained versions against official documentation and pin them during Task 1; no versions have been installed or validated by this plan.
+**Tech Stack:** Node LTS, TypeScript, Express, `pg`, SQL migrations, bcrypt, Zod, Vitest and Supertest; npm workspaces. Task 1 pinned the tooling; execution used Node 24.22.2 and npm 11.19.1.
 
 **Spec:** [Proposed PERN design](../specs/2026-11-02-paper-trading-pern-design.md), [canonical language](../../../GLOSSARY.md), [historical audit](../../PERN_MIGRATION_AUDIT.md).
 
-**Status:** Foundation implementation authorized by the user with “let’s start”. All seven tasks are implemented and task-reviewed. Primary verification passed 20 unit + 92 integration tests, typecheck and build. Final whole-branch review is pending; later milestones remain separate work.
+**Status:** Foundation implementation authorized by the user with “let’s start”. All seven tasks are implemented and task-reviewed. Primary verification passed 20 unit + 92 integration tests, typecheck and build. The final SOL whole-branch review is complete with no blocking findings and one deferred minor HTTP error-mapping follow-up. The isolated test project is stopped. Branch integration awaits the user’s choice; later milestones remain separate work.
 
 ## Global Constraints
 
@@ -40,7 +40,7 @@
 
 Included routes: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/csrf`, `GET /api/account`, and `/api/health/live|ready`.
 Excluded: market data, orders, executions, portfolio valuation, folder CRUD, worker jobs, frontend adaptation and deployment cutover. Later slices receive their own plans; this is deliberately not a full-application plan.
-Builder decisions below are explicit proposals for review: registration returns identity/account but does not log in; login accepts username/password; the default folder is named `Default`; username is trimmed/lowercased ASCII `[a-z0-9_]{3,32}`, email is trimmed/lowercased ASCII email of at most 254 characters, and passwords are unmodified UTF-8 of 12–72 bytes.
+Authorized foundation decisions: registration returns identity/account but does not log in; login accepts username/password; the default folder is named `Default`; username is trimmed/lowercased ASCII `[a-z0-9_]{3,32}`, email is trimmed/lowercased ASCII email of at most 254 characters, and passwords are unmodified UTF-8 of 12–72 bytes.
 Use fixed-window, per-process auth throttling for the stated single-API initial sizing: 20 registration attempts and 20 login attempts per client IP per 15 minutes. Disable proxy trust by default; multi-API rollout must first add a shared limiter. This does not replace database concurrency protection.
 Security choices: exact configured origin match; reject absent/`null` Origin on unsafe routes; 16 KiB JSON body limit; 32 random bytes per session token encoded base64url; SHA-256 token storage; bcrypt cost 12. CSRF is base64url HMAC-SHA-256 of the raw session token using the required server `CSRF_SECRET`; compare fixed-size decoded tokens with constant-time comparison.
 Registration needs Origin protection but no authenticated CSRF token. Login rotates by revoking a supplied valid session and issuing a new one in one transaction. Logout requires a valid session and CSRF, revokes it, clears the cookie and returns 204; later use returns 401.
@@ -221,8 +221,8 @@ expect(revokedAccountRead.status).toBe(401); expect(secondUserAccount.body.accou
 - [x] **Step 2: Run red:** `npm run build` then `npm run test:foundation`; expect a concrete failed acceptance assertion for unfinished behavior; if already green, retain the evidence without manufacturing a failure.
 - [x] **Step 3: Complete operational wiring/docs only.** Document isolated test DB provisioning, distinct owner/runtime URLs, explicit migration before startup, required origin/secret configuration, all eight route examples and cleanup limited to the test project. `.env.pern.example` contains placeholders that cannot be usable production credentials; no legacy setup edits.
 - [x] **Step 4: Verify the reviewed slice:** `npm run typecheck`, `npm run test:unit`, `npm run test:integration`, `npm run build`, `npm run test:foundation`; expect zero exits and passing suites. Confirm runtime-role ledger edits fail, concurrent migrations serialize, fault tests leave no orphans, and restart preserves data. Record actual command results rather than inferring them.
-- [ ] **Step 5: Review/commit only Task 7 files:** `git add <Task-7-files>` then `git commit -m "test: verify durable PERN foundation lifecycle"`. Request a SOL whole-slice review before considering the slice accepted; fix concrete findings and rerun affected checks.
-- [ ] **Step 6: Handoff:** report verified behavior, unresolved risks and deferred milestones; do not switch legacy frontend/Compose or claim the full application migrated. Shut down only the isolated test project with `npm run test:db:down` when verification no longer needs it.
+- [x] **Step 5: Review/commit only Task 7 files:** `git add <Task-7-files>` then `git commit -m "test: verify durable PERN foundation lifecycle"`. Request a SOL whole-slice review before considering the slice accepted; fix concrete findings and rerun affected checks.
+- [x] **Step 6: Handoff:** report verified behavior, unresolved risks and deferred milestones; do not switch legacy frontend/Compose or claim the full application migrated. Shut down only the isolated test project with `npm run test:db:down` when verification no longer needs it.
 
 ## Self-review and approval boundary
 

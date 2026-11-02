@@ -89,7 +89,7 @@ For future tasks, prefer a complete narrow deliverable with its own meaningful c
 | Foundation Task 7 durability acceptance | SOL | Complete/reviewed | `f955e31`; compiled restart/revocation and newer-schema refusal |
 | M2–M7 implementation plans | SOL | Not started | Design review plus predecessor contracts/acceptance; write separate bounded plans |
 
-Preparation inventories remain complete. All seven foundation implementation tasks have now passed their task reviews; see [execution results](2026-11-02-pern-foundation-results.md). The primary independently verified 20 unit + 92 integration tests, typecheck and build. Update later milestones only with their own concrete evidence.
+Preparation inventories remain complete. All seven foundation implementation tasks have now passed their task reviews; see [execution results](2026-11-02-pern-foundation-results.md). The primary independently verified 20 unit + 92 integration tests, typecheck and build, then repeated those checks for final acceptance. Final SOL whole-branch review found no blockers and one deferred minor encoding-error mapping issue. The isolated test project is stopped; branch integration awaits the user’s choice. Update later milestones only with their own concrete evidence.
 
 ## Approval and unresolved decisions
 
