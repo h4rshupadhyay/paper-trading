@@ -15,7 +15,7 @@
     "typecheck": "npm run typecheck --workspaces",
     "build": "npm run build --workspaces",
     "test:unit": "npm run test:unit --workspace @paper/server --",
-    "test:integration": "TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin npm run test:integration --workspace @paper/server --",
+    "test:integration": "npm run build && TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin npm run test:integration --workspace @paper/server --",
     "test:foundation": "npm run test:unit && npm run test:integration",
     "test:db:up": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml up --detach --wait",
     "test:db:down": "docker compose --project-name paper-foundation-test --env-file /dev/null -f apps/server/test/compose.yml down",
