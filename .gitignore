@@ -50,3 +50,6 @@ Thumbs.db
 coverage/
 .pytest_cache/
 htmlcov/
+
+# Isolated implementation checkouts
+.worktrees/
