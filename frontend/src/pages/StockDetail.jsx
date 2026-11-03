@@ -45,6 +45,7 @@ function InstrumentDetail({ ticker }) {
   }
 
   const [quote, setQuote]         = useState(null)
+  const [statisticsLoading,setStatisticsLoading] = useState(false)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [showOrder, setShowOrder] = useState(false)
@@ -67,7 +68,19 @@ function InstrumentDetail({ ticker }) {
       const { data } = await stocksAPI.snapshot(ticker)
       if (version !== requestVersion.current) return
       loaded.current = true
+      setLoading(false)
       setQuote(data)
+      setStatisticsLoading(!data.statisticsFetchedAt)
+      if (!data.statisticsFetchedAt) {
+        try {
+          const result=await stocksAPI.statistics(ticker)
+          if(version===requestVersion.current)setQuote(current=>({...current,...result.data}))
+        } catch (_) {
+          // Keep the quote and expose a small, retryable empty state for statistics.
+        } finally {
+          if(version===requestVersion.current)setStatisticsLoading(false)
+        }
+      }
     } catch (e) {
       if (version === requestVersion.current) setError(e.response?.data?.error || 'Failed to fetch stock data')
     } finally {
@@ -173,15 +186,14 @@ function InstrumentDetail({ ticker }) {
                   <span className="stock-exchange">{quote.exchange}</span>
                 </div>
                 <p className="stock-company">{quote.company_name}</p>
-                <p className="text-muted">Quote: {quote.quality}{quote.fetchedAt ? ` · received ${new Date(quote.fetchedAt).toLocaleString()}` : ''}</p>
-                {quote.provider !== 'yfinance' && <p className="text-muted">{quote.currency} · {quote.provider === "fixture" ? "Simulated fixture data" : quote.provider} · {quote.quality} · {quote.session || "Unknown session"}{quote.observedAt ? ` · ${new Date(quote.observedAt).toLocaleString()}` : ""}</p>}
-                {quote.unavailableReason && <p className="error-banner">{quote.unavailableReason}</p>}
+                {quote.provider === 'fixture' && <p className="text-muted">Simulated fixture data</p>}
+                {quote.unavailableReason && <p className="text-muted">{quote.unavailableReason==='VIEW_ONLY_INDEX' ? 'View-only index' : quote.unavailableReason==='CORPORATE_ACTION_REVIEW' ? 'Trading paused' : 'Trading unavailable'}</p>}
                 <p className="stock-sector">{[quote.sector, quote.industry].filter(Boolean).join(' · ')}</p>
               </div>
 
               <div className="stock-header-right">
                 <div className="stock-price-wrap">
-                  <span className="stock-price">
+                  <span className="stock-price" title={quote.fetchedAt ? `Updated ${new Date(quote.fetchedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : undefined}>
                     {price != null ? fp(price) : '—'}
                   </span>
                   {changePct != null && (
@@ -195,6 +207,7 @@ function InstrumentDetail({ ticker }) {
                   )}
                 </div>
 
+                {quote.quality==='stale' && <p className="text-muted data-note">Price is out of date</p>}
                 <div className="stock-actions">
                   {inWatchlist ? (
                     <button
@@ -252,8 +265,12 @@ function InstrumentDetail({ ticker }) {
 
             {/* Key stats */}
             <section className="card">
-              <h2 className="card-title">Key Statistics</h2>
-              <p className="text-muted" role="status">Statistics: {quote.statisticsQuality || 'unavailable'}{quote.statisticsFetchedAt ? ` · received ${new Date(quote.statisticsFetchedAt).toLocaleString()}` : ' · awaiting provider data'}. These values do not determine trade eligibility.</p>
+              <div className="card-header">
+                <h2 className="card-title" title={quote.statisticsFetchedAt ? `Updated ${new Date(quote.statisticsFetchedAt).toLocaleString()}` : undefined}>Key Statistics</h2>
+                {statisticsLoading ? <span className="text-muted data-note" role="status">Loading…</span>
+                  : !quote.statisticsFetchedAt ? <span className="text-muted data-note" role="status">Unavailable <button className="btn btn-sm btn-ghost" onClick={fetchQuote}>Retry</button></span>
+                  : quote.statisticsQuality==='stale' && <time className="text-muted data-note" dateTime={quote.statisticsFetchedAt}>Updated {new Date(quote.statisticsFetchedAt).toLocaleDateString([], {month:'short',day:'numeric'})}</time>}
+              </div>
               <div className="stats-grid-4">
                 <StatItem label="Open"        value={fp(quote.open)} />
                 <StatItem label="Day High"    value={fp(quote.day_high)} />

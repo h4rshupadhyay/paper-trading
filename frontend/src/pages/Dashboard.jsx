@@ -159,7 +159,9 @@ export default function Dashboard() {
           )}
         </section>
 
-        <p className="text-muted valuation-note">Valuation: {portfolio?.quality || "loading"}. P/L is in INR and includes FX changes. Missing observations remain unavailable.</p>
+        {portfolio?.quality==='stale' && <p className="text-muted valuation-note">Some prices are out of date.</p>}
+        {portfolio?.quality==='review' && <p className="text-muted valuation-note">Some holdings are under review.</p>}
+        {portfolio?.quality==='incomplete' && <p className="text-muted valuation-note">Some holdings can't be valued right now.</p>}
 
         {/* Portfolio growth chart */}
         <section className="card chart-section">

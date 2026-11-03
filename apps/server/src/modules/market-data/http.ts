@@ -1,4 +1,4 @@
-import { marketSnapshot } from './snapshot.js';
+import { marketSnapshot, initialStatistics } from './snapshot.js';
 import { Router } from 'express';
 import { AppError } from '../../platform/errors.js';
 import { type HttpDependencies, requireSession } from '../../platform/http.js';
@@ -23,6 +23,9 @@ export function marketRoutes({ pool }: HttpDependencies): Router {
   router.get('/instruments/:id/quote', async (request, response) => {
     queryKeys(request.query, []); const id = request.params.id as string;
     await refreshInstrument(pool, id); response.json(await readQuote(pool, id));
+  });
+  router.get('/instruments/:id/statistics', async (request,response)=>{
+    queryKeys(request.query,[]);response.json({statistics:await initialStatistics(pool,request.params.id as string)});
   });
   router.get('/instruments/:id/snapshot', async (request,response)=>{
     queryKeys(request.query,[]); response.json(await marketSnapshot(pool,request.params.id as string));

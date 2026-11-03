@@ -75,6 +75,11 @@ Schema migration 005 adds display-only instrument statistics. The authenticated
 statistics snapshot. Stored quotes return promptly and refresh in bounded background
 work when older than 15 seconds; a cold quote gets one bounded bootstrap attempt.
 Stock Detail polls every 15 seconds without resetting the selected chart period.
+On the first visit, a separate authenticated `/api/instruments/:id/statistics` read
+joins the pending bounded refresh so statistics appear as soon as it completes,
+without delaying the quote or waiting for the next poll. Stored statistics still
+return immediately. Successful data has no routine health/provider banner; receipt
+times are in tooltips, with short notices only for loading or unavailable/older data.
 The existing `/quote` endpoint and market-order refresh remain blocking.
 
 The private bridge `/statistics?symbol=...` reads one `Ticker.info` response. Supported

@@ -177,7 +177,7 @@ try {
  await page.goto(`${origin}/stocks/AAPL`);await expect(page.locator('.stock-price')).toHaveText('₹12,450.00');
  fxOutage=true;await page.clock.fastForward(120000);
  await expect(page.locator('.stock-price')).toHaveText('₹—');
- await expect(page.locator('[role="status"]').filter({hasText:'FX estimates'})).toContainText('unavailable');
+ await expect(page.locator('[role="status"]').filter({hasText:'Currency conversion'})).toContainText('unavailable');
  const logout=await page.request.post(`${origin}/api/auth/logout`,{headers});assert.equal(logout.status(),204);await page.reload();await expect(page).toHaveURL(/\/login$/);
  if(process.env.UI_REVIEW_DIR)for(const theme of ['dark','light']) {
   await page.evaluate(value=>localStorage.setItem('theme',value),theme);

@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises';
 // Regression coverage for the November completeness audit.
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
@@ -166,7 +167,7 @@ try {
     // Prevent unrelated Header FX refresh from repairing this missing observation.
     await page.route('**/api/fx-rates',route=>route.fulfill({json:{items:[],baseCurrency:'INR'}}));
     await page.goto(origin+'/analytics');
-    await expect(page.locator('main')).toContainText('Valuation unavailable');
+    await expect(page.locator('main')).toContainText('Some prices are unavailable');
     await expect(page.locator('.empty-state')).toHaveCount(0);
     await expect(page.locator('.stat-card').filter({hasText:'Profitable holdings'}).locator('.stat-value')).toHaveText('—');
     await expect(page.locator('.stat-card').filter({hasText:/^Holdings/}).locator('.stat-value')).toHaveText('1');
@@ -178,13 +179,61 @@ try {
     await page.goto(origin+'/stocks/AAPL');
     await expect(page.locator('.stat-item').filter({hasText:'P/E Ratio'})).toContainText('-5.25');
     await expect(page.locator('.stat-item').filter({hasText:/^Volume/}).locator('.stat-item-value')).toHaveText('0');
-    await expect(page.getByRole('status').filter({hasText:'Statistics:'})).toContainText('stale');
+    await expect(page.locator('time.data-note')).toContainText('Updated');
     await expect(page.getByRole('button',{name:'Trade',exact:true})).toBeEnabled();
     await expect(page.locator('main')).toContainText('An example company.');
     await page.getByRole('button',{name:'1Y',exact:true}).click();
     await expect(page.getByRole('button',{name:'1Y',exact:true})).toHaveClass(/active/);
     await page.getByTitle('Refresh price',{exact:true}).click();
     await expect(page.getByRole('button',{name:'1Y',exact:true})).toHaveClass(/active/);
+  });
+  await scenario('first visit loads statistics directly and keeps routine diagnostics out of the page',async ({page,instrument})=>{
+    await instrument('AAPL');
+    let snapshotCalls=0;
+    await page.route('**/snapshot',async route=>{
+      snapshotCalls++;const response=await route.fetch();const data=await response.json();
+      await route.fulfill({json:{...data,statistics:null}});
+    });
+    await page.route('**/statistics',route=>route.fulfill({json:{statistics:{open:'145',dayHigh:'155',dayLow:'140',previousClose:'149',volume:'0',averageVolume:'12345',marketCap:'2000000000',trailingPE:'-5.25',fiftyTwoWeekHigh:'180',fiftyTwoWeekLow:'100',quality:'fresh',fetchedAt:new Date().toISOString()}}}));
+    await page.goto(origin+'/stocks/AAPL');
+    await expect(page.locator('.stat-item').filter({hasText:'P/E Ratio'}).locator('.stat-item-value')).toHaveText('-5.25',{timeout:4000});
+    assert.equal(snapshotCalls,1,'statistics should finish without waiting for the next quote poll');
+    await expect(page.locator('main')).not.toContainText(/Quote:|Statistics:|trade eligibility|received /);
+    await expect(page.locator('.topbar')).not.toContainText(/FX estimates|yfinance|fresh/);
+    if(process.env.UI_REVIEW_DIR){
+      await mkdir(process.env.UI_REVIEW_DIR,{recursive:true});
+      for(const theme of ['dark','light']){
+        if(theme==='light')await page.getByTitle('Switch to light mode',{exact:true}).click();
+        for(const width of [1440,390]){
+          await page.setViewportSize({width,height:width===390?844:1000});
+          await renderSettled(page);
+          await page.screenshot({path:`${process.env.UI_REVIEW_DIR}/stock-${theme}-${width}.png`,animations:'disabled'});
+        }
+      }
+    }
+  });
+  await scenario('superseding refresh clears the initial statistics loading state',async ({page,instrument})=>{
+    await instrument('AAPL');const held=gate(),requested=gate();let calls=0;
+    const statistics={trailingPE:'12.5',quality:'fresh',fetchedAt:new Date().toISOString()};
+    await page.route('**/snapshot',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({json:{...data,statistics:++calls===1?null:statistics}})});
+    await page.route('**/statistics',async route=>{requested.release();await held.promise;await route.fulfill({json:{statistics}})});
+    try {
+      await page.goto(origin+'/stocks/AAPL');await requested.promise;
+      await expect(page.getByRole('status').filter({hasText:'Loading…'})).toBeVisible();
+      await page.getByTitle('Refresh price',{exact:true}).click();
+      await expect(page.locator('.stat-item').filter({hasText:'P/E Ratio'})).toContainText('12.50');
+      await expect(page.getByRole('status').filter({hasText:'Loading…'})).toHaveCount(0);
+    }finally{held.release();}
+  });
+  await scenario('exception warnings remain visible after routine diagnostics are removed',async ({page,instrument})=>{
+    await instrument('AAPL');
+    await page.route('**/snapshot',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({json:{...data,quality:'stale',unavailableReason:null,statistics:{quality:'fresh',fetchedAt:new Date().toISOString()}}})});
+    await page.goto(origin+'/stocks/AAPL');
+    await expect(page.locator('main')).toContainText('Price is out of date');
+    await expect(page.getByRole('button',{name:'Trade',exact:true})).toBeDisabled();
+    await page.route('**/api/portfolio',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({json:{...data,quality:'review'}})});
+    await page.goto(origin+'/analytics');await expect(page.locator('main')).toContainText('Some holdings are under review');
+    await page.goto(origin+'/dashboard');await expect(page.locator('main')).toContainText('Some holdings are under review');
   });
   await scenario('dashboard history failure does not hide account and retries clear errors',async ({page})=>{
     await page.route('**/api/portfolio/snapshots?*',route=>route.fulfill({status:503,json:{error:{message:'History unavailable'}}}));

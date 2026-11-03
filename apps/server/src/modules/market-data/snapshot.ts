@@ -82,3 +82,13 @@ export async function marketSnapshot(pool:Pool,id:string,provider=getProvider())
   }
   return result;
 }
+
+/** A first-view caller can join the existing bounded refresh without delaying the quote. */
+export async function initialStatistics(pool:Pool,id:string,provider=getProvider()){
+  const current=await readMarketSnapshot(pool,id);
+  if(current.statistics)return current.statistics;
+  const job=pending.get(pool)?.get(id);
+  if(job)await job;
+  else await refreshStatistics(pool,id,provider);
+  return (await readMarketSnapshot(pool,id)).statistics;
+}

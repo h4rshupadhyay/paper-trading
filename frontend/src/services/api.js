@@ -54,6 +54,12 @@ export const authAPI={
   login:async(username,password)=>{const response=await api.post('/auth/login',{username,password});resetCsrf();return response},
   me:()=>api.get('/auth/me'),logout:async()=>{await api.post('/auth/logout');resetCsrf()},account:()=>api.get('/account'),
 }
+function statisticsDisplay(statistics){
+  const values={}
+  for(const [field,key] of Object.entries({open:'open',day_high:'dayHigh',day_low:'dayLow',previous_close:'previousClose',volume:'volume',avg_volume:'averageVolume',market_cap:'marketCap',pe_ratio:'trailingPE','52w_high':'fiftyTwoWeekHigh','52w_low':'fiftyTwoWeekLow'}))values[field]=displayNumber(statistics?.[key])
+  return {...values,statisticsQuality:statistics?.quality??'unavailable',statisticsFetchedAt:statistics?.fetchedAt??null,
+    sector:statistics?.sector,industry:statistics?.industry,description:statistics?.description}
+}
 export const stocksAPI={
   search:q=>mapped(api.get('/instruments',{params:{q}}),data=>data.items.map(stock)),
   catalogue:()=>mapped(api.get('/instruments'),data=>data.items.map(item=>{stock(item);return{s:item.symbol,n:item.name,r:({NMS:'US',NYQ:'US',NSI:'IN',BSE:'IN',LSE:'UK',GER:'EU',JPX:'JP',HKG:'HK'})[item.exchange]}})),
@@ -67,13 +73,12 @@ export const stocksAPI={
   snapshot:async symbol=>{
     const item=await instrument(symbol)
     const {data}=await api.get(`/instruments/${item.id}/snapshot`)
-    const statistics=data.statistics
-    const values={}
-    for(const [field,key] of Object.entries({open:'open',day_high:'dayHigh',day_low:'dayLow',previous_close:'previousClose',volume:'volume',avg_volume:'averageVolume',market_cap:'marketCap',pe_ratio:'trailingPE','52w_high':'fiftyTwoWeekHigh','52w_low':'fiftyTwoWeekLow'}))values[field]=displayNumber(statistics?.[key])
-    return {data:{...stock(item),...data.quote,...values,price:displayNumber(data.quote?.price),change_pct:null,
-      quality:data.quality,unavailableReason:data.unavailableReason,tradable:item.tradable,provider:item.provider,
-      statisticsQuality:statistics?.quality??'unavailable',statisticsFetchedAt:statistics?.fetchedAt??null,
-      sector:statistics?.sector,industry:statistics?.industry,description:statistics?.description}}
+    return {data:{...stock(item),...data.quote,...statisticsDisplay(data.statistics),price:displayNumber(data.quote?.price),change_pct:null,
+      quality:data.quality,unavailableReason:data.unavailableReason,tradable:item.tradable,provider:item.provider}}
+  },
+  statistics:async symbol=>{
+    const item=await instrument(symbol)
+    return mapped(api.get(`/instruments/${item.id}/statistics`),data=>statisticsDisplay(data.statistics))
   },
   history:async(symbol,period='1mo',interval='1d')=>{
     const item=await instrument(symbol)

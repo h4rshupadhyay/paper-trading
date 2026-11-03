@@ -164,7 +164,6 @@ export default function Analytics() {
   return (
     <div className="page-layout">
       <Header title="Analytics" />
-      {portfolio?.quality && <p className="text-muted" style={{padding:"12px 24px"}}>Valuation: {portfolio.quality}. Values and allocation use the INR account currency; P/L includes FX changes.</p>}
 
       <main className="page-content">
 
@@ -172,7 +171,9 @@ export default function Analytics() {
           <div className="error-banner" role="alert">{error}</div>
         )}
 
-        {portfolio?.quality === 'incomplete' && <p role="status">Valuation unavailable. You still own {holdings.length} holding(s). Refresh after market data recovers. <button className="btn btn-sm btn-outline" onClick={fetchPortfolio}>Refresh valuation</button></p>}
+        {portfolio?.quality==='stale' && <p className="text-muted data-note">Some prices are out of date.</p>}
+        {portfolio?.quality==='review' && <p className="text-muted data-note">Some holdings are under review.</p>}
+        {portfolio?.quality === 'incomplete' && <p role="status">Some prices are unavailable. Showing {holdings.length} holding(s). <button className="btn btn-sm btn-outline" onClick={fetchPortfolio}>Refresh</button></p>}
 
         {/* ── Summary stats ── */}
         <section className="stats-grid">

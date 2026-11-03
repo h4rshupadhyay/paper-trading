@@ -2336,3 +2336,6 @@ input, select, textarea { font-family: var(--font); }
 .valuation-note { max-width: 75ch; margin-top: -12px; font-size: 0.85rem; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 :where(input, select, textarea):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.data-note { font-size: 0.75rem; }
+.order-rules { padding: 0 20px; font-size: 0.8rem; line-height: 1.5; }

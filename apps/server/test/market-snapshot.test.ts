@@ -58,3 +58,19 @@ it('rejects invalid statistics without overwriting storage and restricts runtime
   expect((await snapshots.readMarketSnapshot(pool,item.id)).statistics).toBeNull();
   await expect(pool.query('DELETE FROM latest_instrument_statistics')).rejects.toMatchObject({code:'42501'});
 });
+
+it('joins first-visit statistics work so callers can display it without waiting for a quote poll',async()=>{
+  const {pool,item,base}=await setup();
+  let release!:()=>void;
+  const gate=new Promise<void>(r=>{release=r});
+  let calls=0;
+  const provider:MarketProvider={name:'fixture',search:q=>base.search(q),fx:c=>base.fx(c),history:i=>base.history(i),quote:i=>base.quote(i),statistics:async()=>{calls++;await gate;return {symbol:item.symbol,rawCurrency:'GBp',statistics:values,sector:null,industry:null,description:null}}};
+  try {
+    const initial=await snapshots.marketSnapshot(pool,item.id,provider);
+    expect(initial.quote?.price).toBe('150.00000000');expect(initial.statistics).toBeNull();
+    const completed=snapshots.initialStatistics(pool,item.id,provider);
+    release();
+    expect(await completed).toMatchObject({open:'1.23500000',volume:'0'});
+    expect(calls).toBe(1);
+  } finally {release();await snapshots.drainSnapshotRefreshes(pool)}
+});

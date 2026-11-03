@@ -209,7 +209,7 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
           </div>
         )}
 
-        <p className="text-muted" style={{padding:"0 20px"}}>Full fills · cash positions only · zero fees and slippage. Pending orders reserve no cash or shares. Limits and stops use {priceCurr || "the instrument currency"}. Server prices determine execution.</p>
+        {showMore && <p className="text-muted order-rules">Limit and stop prices use {priceCurr || 'the stock currency'}. Pending orders reserve no cash or shares.</p>}
         {error && <p className="zk-error">{error}</p>}
 
         {/* ── Footer ── */}
