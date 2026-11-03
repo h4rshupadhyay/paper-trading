@@ -36,9 +36,12 @@ async function observation(c:PoolClient,id:string):Promise<Observation|undefined
   q.observed_at::text AS quote_observed_at,(CASE WHEN i.currency='INR' THEN q.observed_at ELSE f.observed_at END)::text AS fx_observed_at,
   COALESCE(i.tradable AND NOT i.paused AND (NOT $2::boolean OR i.provider<>'fixture')
    AND q.provider=i.provider AND q.raw_currency=CASE WHEN i.multiplier=0.01 THEN 'GBp' ELSE i.currency END
-   AND q.price=round(q.raw_price*i.multiplier,8) AND q.price>0 AND q.session='REGULAR'
-   AND q.observed_at BETWEEN clock_timestamp()-interval '60 seconds' AND clock_timestamp()+interval '5 seconds'
-   AND (i.currency='INR' OR (f.provider=i.provider AND f.rate>0 AND f.observed_at BETWEEN clock_timestamp()-interval '24 hours' AND clock_timestamp()+interval '5 seconds')),false) AS eligible
+   AND q.price=round(q.raw_price*i.multiplier,8) AND q.price>0
+   AND q.observed_at<=clock_timestamp()+interval '5 seconds'
+   AND ((i.provider='yfinance' AND q.fetched_at BETWEEN clock_timestamp()-interval '60 seconds' AND clock_timestamp()+interval '5 seconds')
+     OR (i.provider<>'yfinance' AND q.session='REGULAR' AND q.observed_at>=clock_timestamp()-interval '60 seconds'))
+   AND (i.currency='INR' OR (f.provider=i.provider AND f.rate>0 AND f.observed_at<=clock_timestamp()+interval '5 seconds'
+     AND CASE WHEN i.provider='yfinance' THEN f.fetched_at ELSE f.observed_at END BETWEEN clock_timestamp()-interval '24 hours' AND clock_timestamp()+interval '5 seconds')),false) AS eligible
   FROM instruments i LEFT JOIN latest_quotes q ON q.instrument_id=i.id LEFT JOIN latest_fx_rates f ON f.currency=i.currency WHERE i.id=$1`,[id,process.env.NODE_ENV==='production'])).rows[0];
 }
 async function reject(c:PoolClient,id:string,reason:string):Promise<void>{await c.query(`UPDATE orders SET status='REJECTED',rejection_reason=$2,completed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`,[id,reason]);}
@@ -51,7 +54,7 @@ async function processOrder(c:PoolClient,account:Account,orderId:string,immediat
   const active=(await c.query('SELECT id FROM lock_active_user((SELECT user_id FROM accounts WHERE id=$1))',[account.id])).rowCount;
   if(!active){await reject(c,o.id,'ACCOUNT_DISABLED');return;}
   const data=await observation(c,o.instrument_id);
-  if(!data?.eligible){if(immediate)throw new AppError(503,'MARKET_DATA_UNAVAILABLE','Fresh regular-session quote and FX required');return;}
+  if(!data?.eligible){if(immediate)throw new AppError(503,'MARKET_DATA_UNAVAILABLE','Market price or exchange rate unavailable');return;}
   if((o.type==='STOP'||o.type==='STOP_LIMIT')&&o.status==='OPEN'){
     const crossed=(await c.query<{yes:boolean}>(`SELECT CASE WHEN $1='BUY' THEN $2::numeric >= $3::numeric ELSE $2::numeric <= $3::numeric END AS yes`,[o.side,data.price,o.stop_price])).rows[0]!.yes;
     if(!crossed)return;

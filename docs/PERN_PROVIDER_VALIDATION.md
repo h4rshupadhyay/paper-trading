@@ -1,5 +1,7 @@
 # PERN market-provider validation
 
+**Scope:** this document records the strict evaluation of the separate `MARKET_PROVIDER=yahoo` adapter. The default is now `MARKET_PROVIDER=yfinance`, which uses a different, user-selected policy allowing paper trades at the latest returned prices. See [yfinance setup and evidence](PERN_YFINANCE.md). The historical acceptance failures below do not disable yfinance paper trading and are not claims of exchange-grade feed acceptance.
+
 Latest recheck: **3 November 2026**, with the original 2 November observations retained below. Live trading acceptance: **unavailable in all six regions**. The Yahoo adapter supports discovery, display quotes, raw OHLC history and INR-directed FX, but reachability is not execution acceptance. Every discovered Yahoo instrument has `tradable=false` and an explicit reason. The adapter emits `session=UNKNOWN`; it never infers a confirmed regular session from a calendar window or substitutes a previous close.
 
 ## Repeatable recheck: 3 November 2026
@@ -36,7 +38,7 @@ The probe refuses production mode and its harness refuses connections outside th
 
 ## Providers and sources
 
-`MARKET_PROVIDER=yahoo` is the default. The adapter uses Node's native fetch against Yahoo's public chart and search endpoints. It adds no runtime dependency on Python or on the yahoo-finance2 package. Its endpoint and field investigation used the package maintainer's primary source: [chart module](https://github.com/gadicc/yahoo-finance2/blob/dev/src/modules/chart.ts) and [search module](https://github.com/gadicc/yahoo-finance2/blob/dev/src/modules/search.ts). The chart module exposes OHLC arrays separately from adjusted-close data and includes currency, observation timestamps, trading periods and optional events. These package sources describe the transport; they do not establish an exchange data entitlement or complete corporate-action coverage.
+`MARKET_PROVIDER=yahoo` selects the original view-only adapter. The adapter uses Node's native fetch against Yahoo's public chart and search endpoints. It adds no runtime dependency on Python or on the yahoo-finance2 package. Its endpoint and field investigation used the package maintainer's primary source: [chart module](https://github.com/gadicc/yahoo-finance2/blob/dev/src/modules/chart.ts) and [search module](https://github.com/gadicc/yahoo-finance2/blob/dev/src/modules/search.ts). The chart module exposes OHLC arrays separately from adjusted-close data and includes currency, observation timestamps, trading periods and optional events. These package sources describe the transport; they do not establish an exchange data entitlement or complete corporate-action coverage.
 
 Yahoo's own [exchanges and data delays](https://help.yahoo.com/kb/finance/article-exchanges-data-delays-sln2310.html) page was also requested. That documentation request returned HTTP429 in this environment. No exact exchange delay or live-data guarantee is claimed from that inaccessible page.
 

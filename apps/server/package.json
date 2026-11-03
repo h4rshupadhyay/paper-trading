@@ -11,7 +11,8 @@
     "db:migrate": "tsx src/platform/migrate.ts",
     "start:api": "node dist/src/api.js",
     "start:worker": "node dist/src/worker.js",
-    "market:validate": "tsx test/provider-validation.ts"
+    "market:validate": "tsx test/provider-validation.ts",
+    "market:probe:yfinance": "tsx test/yfinance-live.probe.ts"
   },
   "dependencies": {
     "@paper/contracts": "0.0.0",

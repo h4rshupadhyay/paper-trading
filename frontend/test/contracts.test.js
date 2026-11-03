@@ -44,3 +44,19 @@ test('display conversion expires observations even when refresh fails and keeps 
   assert.equal(rates.USD.provider,'fixture')
   assert.equal(rates.USD.observedAt,usd.observedAt)
 })
+test('yfinance display conversion uses recently confirmed FX while preserving its older source time',()=>{
+  const now=Date.parse('2026-11-03T12:00:00Z');
+  const usd={currency:'USD',provider:'yfinance',rate:'94',quality:'fresh',observedAt:'2026-10-30T20:00:00Z',fetchedAt:'2026-11-03T11:59:00Z'};
+  assert.equal(contracts.convertDisplayCurrency('10','USD','INR',{USD:usd},now),940);
+  assert.equal(contracts.convertDisplayCurrency('10','USD','INR',{USD:{...usd,fetchedAt:undefined}},now),null);
+  assert.equal(contracts.convertDisplayCurrency('10','USD','INR',{USD:usd},now+86400000),null);
+})
+test('yfinance paper quotes can trade with an unknown session but missing or unavailable inputs cannot',()=>{
+  assert.equal(typeof contracts.canTradeQuote,'function');
+  const quote={provider:'yfinance',tradable:true,price:150,quality:'fresh',session:'UNKNOWN'};
+  assert.equal(contracts.canTradeQuote(quote),true);
+  assert.equal(contracts.canTradeQuote({...quote,provider:'yahoo'}),false);
+  assert.equal(contracts.canTradeQuote({...quote,price:null}),false);
+  assert.equal(contracts.canTradeQuote({...quote,tradable:false}),false);
+  assert.equal(contracts.canTradeQuote({...quote,quality:'stale'}),false);
+})

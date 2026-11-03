@@ -1,13 +1,14 @@
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../platform/errors.js';
 import { FixtureProvider, YahooProvider, type Currency, type Instrument, type MarketProvider, type ProviderBar, type ProviderQuote, type HistoryOptions } from './provider.js';
+import { YfinanceProvider, YfinanceMetadataChanged } from './yfinance-provider.js';
 
 let selected: MarketProvider | undefined;
 export function getProvider(): MarketProvider {
-  const mode = process.env.MARKET_PROVIDER ?? 'yahoo';
+  const mode = process.env.MARKET_PROVIDER ?? 'yfinance';
   if (mode === 'fixture' && process.env.NODE_ENV === 'production') throw new Error('Fixture market provider is forbidden in production');
-  if (!['fixture','yahoo'].includes(mode)) throw new Error('Unsupported market provider');
-  if (!selected || selected.name !== mode) selected = mode === 'fixture' ? new FixtureProvider() : new YahooProvider();
+  if (!['fixture','yahoo','yfinance'].includes(mode)) throw new Error('Unsupported market provider');
+  if (!selected || selected.name !== mode) selected = mode === 'fixture' ? new FixtureProvider() : mode==='yfinance' ? new YfinanceProvider() : new YahooProvider();
   return selected;
 }
 const columns = `id,symbol,name,exchange,currency,multiplier,kind,tradable,paused,provider,unavailable_reason AS "unavailableReason"`;
@@ -35,7 +36,7 @@ export async function discoverInstruments(pool: Pool, query: string, provider = 
       name=EXCLUDED.name,exchange=EXCLUDED.exchange,
       paused=instruments.paused OR instruments.currency<>EXCLUDED.currency OR instruments.multiplier<>EXCLUDED.multiplier,
       tradable=EXCLUDED.tradable,unavailable_reason=EXCLUDED.unavailable_reason`,
-    [item.symbol,item.name,item.exchange,item.currency,item.multiplier,item.kind,item.kind === 'EQUITY' && item.tradable && provider.name === 'fixture',provider.name,item.unavailableReason]);
+    [item.symbol,item.name,item.exchange,item.currency,item.multiplier,item.kind,item.kind === 'EQUITY' && item.tradable && ['fixture','yfinance'].includes(provider.name),provider.name,item.unavailableReason]);
   }
   return (await pool.query<Instrument>(`SELECT ${columns} FROM public.instruments WHERE provider=$1 AND (strpos(lower(symbol),lower($2))>0 OR strpos(lower(name),lower($2))>0) ORDER BY symbol LIMIT 30`, [provider.name, query])).rows;
 }
@@ -54,7 +55,10 @@ async function persistQuote(client: PoolClient, instrument: Instrument, quote: P
       WHERE $2::numeric * $3::numeric BETWEEN 0.00000001 AND 999999999999.99999999
       ON CONFLICT(instrument_id) DO UPDATE SET price=EXCLUDED.price,raw_currency=EXCLUDED.raw_currency,raw_price=EXCLUDED.raw_price,
       observed_at=EXCLUDED.observed_at,fetched_at=EXCLUDED.fetched_at,session=EXCLUDED.session,action_key=EXCLUDED.action_key,provider=EXCLUDED.provider
-      WHERE EXCLUDED.observed_at > latest_quotes.observed_at RETURNING instrument_id`,
+      WHERE EXCLUDED.observed_at > latest_quotes.observed_at OR
+        (EXCLUDED.provider='yfinance' AND EXCLUDED.observed_at=latest_quotes.observed_at
+         AND EXCLUDED.raw_price=latest_quotes.raw_price AND EXCLUDED.raw_currency=latest_quotes.raw_currency
+         AND EXCLUDED.action_key=latest_quotes.action_key AND EXCLUDED.provider=latest_quotes.provider) RETURNING instrument_id`,
     [instrument.id,quote.rawPrice,instrument.multiplier,quote.rawCurrency,quote.observedAt,quote.session,quote.actionKey,provider.name]);
     if (previous?.eligible_action && previous.action_key !== quote.actionKey) await client.query('UPDATE public.instruments SET paused=true WHERE id=$1', [instrument.id]);
     await client.query('COMMIT');
@@ -68,7 +72,8 @@ async function persistFx(client: PoolClient, currency: Currency, provider: Marke
   await client.query(`INSERT INTO public.latest_fx_rates(currency,rate,observed_at,fetched_at,provider)
     SELECT $1,$2::numeric,$3,clock_timestamp(),$4 WHERE $2::numeric BETWEEN 0.000000000001 AND 999999999999.999999999999
     ON CONFLICT(currency) DO UPDATE SET rate=EXCLUDED.rate,observed_at=EXCLUDED.observed_at,fetched_at=EXCLUDED.fetched_at,provider=EXCLUDED.provider
-    WHERE EXCLUDED.observed_at > latest_fx_rates.observed_at`, [currency,fx.rate,fx.observedAt,provider.name]);
+    WHERE EXCLUDED.provider<>latest_fx_rates.provider OR EXCLUDED.observed_at > latest_fx_rates.observed_at OR
+      (EXCLUDED.provider='yfinance' AND EXCLUDED.observed_at=latest_fx_rates.observed_at AND EXCLUDED.rate=latest_fx_rates.rate)`, [currency,fx.rate,fx.observedAt,provider.name]);
 }
 export async function refreshInstrument(pool: Pool, id: string, provider = getProvider()): Promise<void> {
   await refreshWithinDeadline(pool,id,provider,Date.now()+8000);
@@ -84,7 +89,10 @@ async function refreshWithinDeadline(pool: Pool, id: string, provider: MarketPro
     // Attempts rotate even on outage; this timestamp never changes observation freshness.
     await client.query('UPDATE public.instruments SET refresh_attempted_at=clock_timestamp() WHERE id=$1',[id]);
     let quote: ProviderQuote | undefined;
-    try { quote = await bounded(provider.quote(instrument),Math.max(1,deadline-Date.now())); } catch { /* Preserve the last observation; fetched time cannot conceal outage. */ }
+    try { quote = await bounded(provider.quote(instrument),Math.max(1,deadline-Date.now())); } catch(error) {
+      if(error instanceof YfinanceMetadataChanged)await client.query('UPDATE public.instruments SET paused=true WHERE id=$1',[instrument.id]);
+      // An outage preserves observations without renewing their receipt time.
+    }
     if (quote && validQuote(quote, instrument)) await persistQuote(client, instrument, quote, provider);
     else if (quote && typeof quote.rawCurrency === 'string' && quote.rawCurrency !== (instrument.multiplier === '0.01000000' ? 'GBp' : instrument.currency)) await client.query('UPDATE public.instruments SET paused=true WHERE id=$1',[instrument.id]);
     await persistFx(client, instrument.currency, provider,deadline);
@@ -134,7 +142,9 @@ export async function readQuote(pool: Pool, id: string): Promise<{ quote: QuoteD
     to_char(observed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt",
     to_char(fetched_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "fetchedAt",session,provider,
     raw_currency AS "rawCurrency",raw_price::text AS "rawPrice",action_key AS "actionKey",
-    CASE WHEN observed_at < clock_timestamp()-interval '60 seconds' OR observed_at > clock_timestamp()+interval '5 seconds' THEN 'stale' ELSE 'fresh' END AS quality
+    CASE WHEN observed_at > clock_timestamp()+interval '5 seconds'
+      OR CASE WHEN provider='yfinance' THEN fetched_at ELSE observed_at END < clock_timestamp()-interval '60 seconds'
+      OR fetched_at > clock_timestamp()+interval '5 seconds' THEN 'stale' ELSE 'fresh' END AS quality
     FROM public.latest_quotes WHERE instrument_id=$1`, [id,instrument.currency])).rows[0] ?? null;
   if (row && instrument.paused) row.quality = 'unavailable';
   return { quote: row, quality: row?.quality ?? 'unavailable', unavailableReason: instrument.paused ? 'CORPORATE_ACTION_REVIEW' : instrument.unavailableReason ?? (row ? null : 'NO_OBSERVATION') };
@@ -160,7 +170,8 @@ export async function readFxRates(pool: Pool, provider?: MarketProvider) {
     try {
       locked = (await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock(1480963204) AS locked')).rows[0]!.locked;
       if (locked) for (const currency of ['INR','USD','GBP','EUR','JPY','HKD'] as Currency[]) {
-        const recent = (await client.query(`SELECT 1 FROM public.latest_fx_rates WHERE currency=$1 AND provider=$2 AND fetched_at>clock_timestamp()-interval '15 seconds' AND observed_at>clock_timestamp()-interval '24 hours'`, [currency,provider.name])).rowCount;
+        const recent = (await client.query(`SELECT 1 FROM public.latest_fx_rates WHERE currency=$1 AND provider=$2 AND fetched_at>clock_timestamp()-interval '15 seconds'
+          AND (provider='yfinance' OR observed_at>clock_timestamp()-interval '24 hours')`, [currency,provider.name])).rowCount;
         if (!recent) await persistFx(client,currency,provider);
       }
     } finally {
@@ -171,6 +182,7 @@ export async function readFxRates(pool: Pool, provider?: MarketProvider) {
   return { items: (await pool.query(`SELECT currency,rate,provider,
     to_char(observed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt",
     to_char(fetched_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "fetchedAt",
-    CASE WHEN observed_at < clock_timestamp()-interval '24 hours' OR observed_at > clock_timestamp()+interval '5 seconds' THEN 'stale' ELSE 'fresh' END AS quality
+    CASE WHEN CASE WHEN provider='yfinance' THEN fetched_at ELSE observed_at END < clock_timestamp()-interval '24 hours'
+      OR observed_at > clock_timestamp()+interval '5 seconds' OR fetched_at > clock_timestamp()+interval '5 seconds' THEN 'stale' ELSE 'fresh' END AS quality
     FROM public.latest_fx_rates WHERE ($1::text IS NULL OR provider=$1) ORDER BY currency`,[provider?.name ?? null])).rows, baseCurrency: 'INR' };
 }

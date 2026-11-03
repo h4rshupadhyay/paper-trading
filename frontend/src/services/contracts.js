@@ -15,6 +15,10 @@ export function displayNumber(value) {
   const number = Number(value)
   return Number.isFinite(number) && Math.abs(number) <= 1e15 ? number : null
 }
+export function canTradeQuote(quote) {
+  return !!quote?.tradable && displayNumber(quote.price)>0 && quote.quality==='fresh'
+    && (quote.provider==='yfinance'||quote.session==='REGULAR')
+}
 export function convertDisplayCurrency(value,source,target,observations,now=Date.now()) {
   const number=displayNumber(value)
   if(number==null || !source || !target)return null
@@ -22,9 +26,10 @@ export function convertDisplayCurrency(value,source,target,observations,now=Date
   const rate=currency=>{
     if(currency==='INR')return 1
     const item=observations[currency],observedAt=Date.parse(item?.observedAt)
+    const confirmedAt=item?.provider==='yfinance'?Date.parse(item.fetchedAt):observedAt
     const value=displayNumber(item?.rate)
-    return item?.quality==='fresh' && Number.isFinite(observedAt)
-      && now-observedAt<=86400000 && observedAt-now<=5000 && value>0 ? value : null
+    return item?.quality==='fresh' && Number.isFinite(observedAt) && Number.isFinite(confirmedAt)
+      && now-confirmedAt<=86400000 && confirmedAt-now<=5000 && observedAt-now<=5000 && value>0 ? value : null
   }
   const from=rate(source),to=rate(target)
   return from && to ? displayNumber(number*from/to) : null

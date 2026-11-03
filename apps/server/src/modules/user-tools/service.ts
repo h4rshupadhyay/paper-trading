@@ -160,8 +160,9 @@ export async function evaluateAlerts(pool: Pool): Promise<void> {
     SELECT a.id,q.observed_at,i.symbol,i.currency FROM price_alerts a
     JOIN users u ON u.id=a.user_id AND u.active JOIN instruments i ON i.id=a.instrument_id
     JOIN latest_quotes q ON q.instrument_id=i.id
-    WHERE a.active AND NOT i.paused AND q.session='REGULAR' AND q.price>0
-      AND q.observed_at>=statement_timestamp()-interval '60 seconds'
+    WHERE a.active AND NOT i.paused AND q.price>0
+      AND ((i.provider='yfinance' AND q.fetched_at>=statement_timestamp()-interval '60 seconds')
+        OR (i.provider<>'yfinance' AND q.session='REGULAR' AND q.observed_at>=statement_timestamp()-interval '60 seconds'))
       AND q.observed_at<=statement_timestamp()+interval '5 seconds'
       AND q.fetched_at<=statement_timestamp()+interval '5 seconds'
       AND q.provider=i.provider

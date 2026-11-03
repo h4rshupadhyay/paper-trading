@@ -11,7 +11,7 @@ A paper-trading app for exploring stocks, practising trades, and tracking a port
 - Set one-shot price alerts and receive in-app notifications.
 - Switch regions and display currencies while keeping account balances in INR.
 
-**Market-data availability:** real market data is currently available for viewing. Trading against it remains disabled until the provider meets the app's data requirements. To try the full trading workflow locally, select the simulated-data mode described below.
+**Market data:** yfinance supplies prices for browsing and paper trades. Trades use the latest price returned by the service, including prices from closed markets. Missing or invalid prices and exchange rates block execution; simulated prices are never substituted automatically.
 
 ## Getting started
 
@@ -33,10 +33,11 @@ Choose a data mode in the same file:
 
 | Setting | Behaviour |
 | --- | --- |
+| `MARKET_PROVIDER=yfinance` | Yahoo Finance prices through Python’s yfinance library, used for browsing and paper trades. |
 | `MARKET_PROVIDER=fixture` | Simulated prices for trying trades, orders, alerts, and portfolio tracking locally. |
 | `MARKET_PROVIDER=yahoo` | Real market data for browsing and charts; instruments are currently view-only. |
 
-The example defaults to `yahoo`. Set it to `fixture` for a working trading demo. Simulated data is never used automatically when a provider fails, and fixture mode is disabled in production.
+The example defaults to `yfinance`. Fixture mode is disabled in production. Indices remain view-only in every mode.
 
 ### 2. Start the app
 
@@ -46,7 +47,7 @@ docker compose --env-file .env.pern-compose.local -f compose.pern.yml up --build
 
 Open **http://localhost:3000**, create an account, and sign in. If you change the web port, update both `PERN_WEB_PORT` and `PUBLIC_ORIGIN` in the environment file.
 
-The stack starts the web app, API, background worker, and PostgreSQL database. Database migrations run before the API and worker start. Account and trading data persist across restarts.
+The stack starts the web app, API, background worker, private yfinance service, and PostgreSQL database. Database migrations run before the API and worker start. Account and trading data persist across restarts.
 
 ### 3. Stop the app
 
@@ -71,6 +72,7 @@ This preserves the database volume. Adding `--volumes` deletes its stored data.
 | --- | --- |
 | Web app | React, Vite, React Router, Recharts |
 | API | Node.js, Express, TypeScript |
+| Market data | Python, yfinance |
 | Database | PostgreSQL, `pg`, versioned SQL migrations |
 | Background jobs | Node.js worker for orders, alerts, market refreshes, and portfolio snapshots |
 | Authentication | Server-side cookie sessions with CSRF protection |
@@ -93,7 +95,7 @@ npm run db:migrate
 npm run build
 ```
 
-Run the API, worker, and frontend in separate terminals with their environment configured:
+Start the [Python market-data service](docs/PERN_YFINANCE.md#standalone-development), then run the API, worker, and frontend in separate terminals with their environment configured:
 
 ```bash
 npm run start:api
@@ -117,6 +119,8 @@ npm run test:e2e
 npm run test:db:down
 ```
 
+With the market-data virtual environment activated, run `npm run test:market` for the offline Python service tests.
+
 Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
 
 ## Project structure
@@ -131,6 +135,7 @@ apps/server/src/
 apps/server/migrations/    Database migrations
 apps/server/test/          Backend and browser tests
 packages/contracts/        Shared API types
+services/yfinance/         Private Python market-data service and offline tests
 deploy/pern/               Dockerfiles, nginx configuration, and database role setup
 docs/                      Setup, operations, and design documentation
 ```
@@ -138,7 +143,8 @@ docs/                      Setup, operations, and design documentation
 ## Documentation
 
 - [Setup and operations](docs/PERN_SETUP.md) — local configuration, deployment, health checks, and backups.
-- [Market-data support](docs/PERN_PROVIDER_VALIDATION.md) — provider coverage and requirements for enabling trading with real data.
+- [yfinance paper trading](docs/PERN_YFINANCE.md) — current price policy, service setup, and six-region verification.
+- [Strict Yahoo validation](docs/PERN_PROVIDER_VALIDATION.md) — historical evaluation of the separate view-only Yahoo adapter.
 - [Provider alternatives](docs/PERN_PROVIDER_RESEARCH.md) — official-source coverage, delays, and evidence still needed for trading.
 - [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.
 

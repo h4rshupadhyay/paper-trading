@@ -10,7 +10,7 @@ async function valuation(c:Pool|PoolClient,userId:string):Promise<Valuation>{
   const row=(await c.query<Valuation>(`WITH account AS (
     SELECT a.* FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.user_id=$1 AND u.active
   ), inputs AS (
-    SELECT p.*,i.symbol,i.name,i.currency,i.paused,q.session,q.observed_at AS quote_time,
+    SELECT p.*,i.symbol,i.name,i.currency,i.paused,i.provider,q.session,q.observed_at AS quote_time,q.fetched_at AS quote_received,f.fetched_at AS fx_received,
       CASE WHEN q.price>0 AND q.provider=i.provider AND (NOT $2::boolean OR i.provider<>'fixture')
         AND q.raw_currency=CASE WHEN i.multiplier=0.01 THEN 'GBp' ELSE i.currency END AND q.price=round(q.raw_price*i.multiplier,8)
         AND q.observed_at<=clock_timestamp()+interval '5 seconds' THEN q.price END AS price,
@@ -22,8 +22,10 @@ async function valuation(c:Pool|PoolClient,userId:string):Promise<Valuation>{
     SELECT *,CASE WHEN round(quantity*price*rate,2)<=99999999999999999999.99 THEN round(quantity*price*rate,2) END AS value FROM inputs
   ), valued AS (
     SELECT *,CASE WHEN value IS NULL THEN 'incomplete'  WHEN paused THEN 'review'
-        WHEN quote_time<clock_timestamp()-interval '60 seconds' OR fx_time<clock_timestamp()-interval '24 hours'
-          OR session IS DISTINCT FROM 'REGULAR' THEN 'stale' ELSE 'fresh' END AS quality
+        WHEN provider='yfinance' AND (quote_received<clock_timestamp()-interval '60 seconds'
+          OR (currency<>'INR' AND fx_received<clock_timestamp()-interval '24 hours')) THEN 'stale'
+        WHEN provider<>'yfinance' AND (quote_time<clock_timestamp()-interval '60 seconds' OR fx_time<clock_timestamp()-interval '24 hours'
+          OR session IS DISTINCT FROM 'REGULAR') THEN 'stale' ELSE 'fresh' END AS quality
     FROM priced
   ), totals AS (
     SELECT COALESCE(sum(value),0) AS holdings,COALESCE(sum(value-base_cost),0) AS pl,

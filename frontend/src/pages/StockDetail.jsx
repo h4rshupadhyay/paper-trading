@@ -9,6 +9,7 @@ import PriceChart from '../components/PriceChart'
 import OrderForm from '../components/OrderForm'
 import { Skeleton } from '../components/LoadingSkeleton'
 import { stocksAPI, watchlistAPI } from '../services/api'
+import { canTradeQuote } from '../services/contracts'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
 function StatItem({ label, value }) {
@@ -154,7 +155,7 @@ export default function StockDetail() {
                   <span className="stock-exchange">{quote.exchange}</span>
                 </div>
                 <p className="stock-company">{quote.company_name}</p>
-                <p className="text-muted">{quote.currency} · {quote.provider === "fixture" ? "Simulated fixture data" : quote.provider} · {quote.quality} · {quote.session || "Unknown session"}{quote.observedAt ? ` · ${new Date(quote.observedAt).toLocaleString()}` : ""}</p>
+                {quote.provider !== 'yfinance' && <p className="text-muted">{quote.currency} · {quote.provider === "fixture" ? "Simulated fixture data" : quote.provider} · {quote.quality} · {quote.session || "Unknown session"}{quote.observedAt ? ` · ${new Date(quote.observedAt).toLocaleString()}` : ""}</p>}
                 {quote.unavailableReason && <p className="error-banner">{quote.unavailableReason}</p>}
                 <p className="stock-sector">{[quote.sector, quote.industry].filter(Boolean).join(' · ')}</p>
               </div>
@@ -222,7 +223,7 @@ export default function StockDetail() {
                   <button
                     className="btn btn-primary"
                     onClick={() => setShowOrder(true)}
-                    disabled={price == null || !quote.tradable || quote.quality !== "fresh" || quote.session !== "REGULAR"}
+                    disabled={!canTradeQuote(quote)}
                   >
                     <ShoppingCart size={15} /> Trade
                   </button>
