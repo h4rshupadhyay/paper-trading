@@ -11,7 +11,7 @@
 ## Tasks and verification
 
 - [x] **1 — stale UI responses:** browser regression for late stock response versus current route; then late note read versus new draft; then chart-period and search responses. Implement one guard/reset at a time. Verify the affected browser cases and frontend checks. Commit `fix: ignore obsolete UI responses and preserve drafts`.
-- [ ] **2 — accepted-order feedback:** commit a real order while rejecting the subsequent account refresh; assert success and exactly one order through the public HTTP API. Separate refresh failure from submission. Commit `fix: preserve successful order outcome during refresh failures`.
+- [x] **2 — accepted-order feedback:** commit a real order while rejecting the subsequent account refresh; assert success and exactly one order through the public HTTP API. Separate refresh failure from submission. Commit `fix: preserve successful order outcome during refresh failures`.
 - [ ] **3 — candle accuracy:** known rising/falling OHLC rendered in Candle mode; assert direction and positions against the plotted price axis. Replace the incorrect per-bar/hard-coded scale. Commit `fix: render candles against the actual price scale`.
 - [ ] **4 — folder UUID:** select a named folder through the Add form; assert the resulting entry's folder through the API. Preserve UUID strings. Commit `fix: preserve watchlist folder UUID selections`.
 - [ ] **5 — visible failures:** failed note save preserves draft and displays retryable error; extend the pattern to loads and other audited tools in vertical slices. Commit `fix: surface resource errors without discarding user input`.
@@ -29,3 +29,7 @@ Each task records the failing assertion, passing command, and commit below. Befo
 RED: the production browser reported AAPL instead of RELIANCE.NS after releasing a held old quote; Existing note instead of New draft after a held read; AAPL instead of newer local Reliance search results. Each regression was run before its minimal implementation. GREEN: `npm run test:browser:audit` passes all three cases; `npm run typecheck` and16 frontend tests pass. Instrument-keyed mounting also resets route-specific order/chart state. Note request generations invalidate reads on New/Close/unmount; search effect cleanup ignores obsolete success/error/finally results.
 
 Ruling: the chart hides its period controls while loading, so selecting a second period during a held request is not an available user action. An attempted test demonstrated a test-design problem rather than an additional product bug and was discarded. Cross-instrument chart state is reset by the keyed instrument mount; no speculative extra chart state machinery was added.
+
+### Task 2 — accepted order versus account refresh
+
+RED: an actual filled order followed by a503 account refresh left the order modal open (`expected count0, received1`). GREEN: all4 audit browser cases and16 frontend tests pass; typecheck passes. Submission acknowledges/ closes independently of account refresh; the account context exposes a separate retryable warning, and the regression verifies exactly one FILLED order through HTTP and successful warning recovery.

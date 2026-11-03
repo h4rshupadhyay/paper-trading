@@ -162,6 +162,25 @@ try {
     } finally { held.release(); }
   });
 
+  await scenario('accepted market order remains successful when account refresh fails', async ({ page, request, instrument }) => {
+    await instrument('RELIANCE.NS');
+    await page.goto(origin + '/stocks/RELIANCE.NS');
+    await page.getByRole('button', { name: 'Trade', exact: true }).click();
+    await page.getByLabel('Qty.', { exact: true }).fill('1');
+    // The actual financial request succeeds; only its later display refresh fails.
+    await page.route('**/api/account', route => route.fulfill({ status: 503,
+      json: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Account temporarily unavailable', requestId: 'audit' } } }));
+    await page.getByRole('button', { name: 'Buy', exact: true }).click();
+    await expect(page.locator('.zk-card')).toHaveCount(0);
+    const orders = await (await request.get(origin + '/api/orders')).json();
+    assert.equal(orders.items.length, 1);
+    assert.equal(orders.items[0].status, 'FILLED');
+    await expect(page.locator('main')).toContainText(/filled|executed|placed|completed/i);
+    await expect(page.getByRole('alert')).toContainText('Account display could not refresh');
+    await page.unroute('**/api/account');
+    await page.getByRole('button', { name: 'Refresh account', exact: true }).click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
 } finally {
   await browser?.close();
   if (web && web.exitCode == null) {

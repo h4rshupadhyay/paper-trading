@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Sun, Moon, Bell, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { useRegion, REGIONS, tickerCurrency } from '../context/RegionContext'
 import StockSearch from './StockSearch'
 import { alertsAPI, stocksAPI } from '../services/api'
@@ -200,6 +201,8 @@ function IndexTicker() {
 
 /* ── Header ────────────────────────────────────────────────────── */
 export default function Header({ title }) {
+  const { refreshError, refreshUser } = useAuth()
+  const [refreshingAccount, setRefreshingAccount] = useState(false)
   const { theme, toggleTheme } = useTheme()
   const { rates, ratesLoaded, fxAsOf } = useRegion()
   const observations=Object.values(rates).filter(item=>item.currency!=='INR')
@@ -211,6 +214,7 @@ export default function Header({ title }) {
   const fxDetails=observations.map(item=>`${item.currency}: ${item.provider??'unknown source'}, observed ${item.observedAt}, ${convertDisplayCurrency('1',item.currency,'INR',rates,fxAsOf)==null?'unavailable':'fresh'}`).join('\n')
 
   return (
+    <>
     <header className="topbar">
       <div className="topbar-left">
         {title && <h1 className="page-title">{title}</h1>}
@@ -236,5 +240,13 @@ export default function Header({ title }) {
         </button>
       </div>
     </header>
+    {refreshError && <div className="error-banner" role="alert">
+      Account display could not refresh. Your accepted orders are unchanged.{' '}
+      <button className="btn btn-sm btn-outline" disabled={refreshingAccount} onClick={async () => {
+        setRefreshingAccount(true)
+        try { await refreshUser() } catch (_) {} finally { setRefreshingAccount(false) }
+      }}>Refresh account</button>
+    </div>}
+    </>
   )
 }

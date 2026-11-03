@@ -66,9 +66,10 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
         if (!price) { setError('Price unavailable — try again'); setLoading(false); return }
         const fn       = isBuy ? tradingAPI.buy : tradingAPI.sell
         const { data } = await fn(ticker, quantity, key)
-        await refreshUser()
-        onSuccess?.(data)
+        onSuccess?.({ ...data, message: data.order?.status === 'FILLED' ? 'Order filled' : 'Order placed' })
         onClose?.()
+        // Execution is already durable. A display refresh cannot change its outcome.
+        void refreshUser().catch(() => {})
       } else {
         // Validate required prices per order type
         if ((orderType === 'LIMIT' || isSL) && !limitPrice) {

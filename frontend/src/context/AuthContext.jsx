@@ -3,10 +3,13 @@ import {authAPI} from '../services/api'
 const AuthContext=createContext(null)
 export function AuthProvider({children}) {
   const [user,setUser]=useState(null),[loading,setLoading]=useState(true)
+  const [refreshError,setRefreshError]=useState(false)
   const refreshUser=useCallback(async()=>{
-    const [{data:identity},{data:account}]=await Promise.all([authAPI.me(),authAPI.account()])
-    const next={...identity.user,user_id:identity.user.id,balance:account.account.cashBalance}
-    setUser(next);return next
+    try {
+      const [{data:identity},{data:account}]=await Promise.all([authAPI.me(),authAPI.account()])
+      const next={...identity.user,user_id:identity.user.id,balance:account.account.cashBalance}
+      setUser(next);setRefreshError(false);return next
+    } catch(error) { setRefreshError(true);throw error }
   },[])
   useEffect(()=>{
     localStorage.removeItem('token');localStorage.removeItem('user')
@@ -23,6 +26,6 @@ export function AuthProvider({children}) {
   const logout=useCallback(async()=>{
     try{await authAPI.logout();setUser(null)}catch(error){if(error.response?.status===401)setUser(null);else throw error}
   },[])
-  return <AuthContext.Provider value={{user,loading,login,register,logout,refreshUser}}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{user,loading,login,register,logout,refreshUser,refreshError}}>{children}</AuthContext.Provider>
 }
 export function useAuth(){const context=useContext(AuthContext);if(!context)throw Error('AuthProvider required');return context}
