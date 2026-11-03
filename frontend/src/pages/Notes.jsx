@@ -3,6 +3,7 @@ import {
   FileText, Plus, Trash2, Save, Tag, X, Loader2,
 } from 'lucide-react'
 import Header from '../components/Header'
+import ResourceError from '../components/ResourceError'
 import TickerInput from '../components/TickerInput'
 import { notesAPI } from '../services/api'
 
@@ -14,6 +15,8 @@ export default function Notes() {
   const [saving, setSaving]         = useState(false)
   const [deleting, setDeleting]     = useState(false)
   const [toast, setToast]           = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [editorError, setEditorError] = useState(null)
   const editorRequest = useRef(0)
   useEffect(() => () => { editorRequest.current += 1 }, [])
 
@@ -29,30 +32,36 @@ export default function Notes() {
 
   const fetchList = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const { data } = await notesAPI.list()
       setNotes(data)
-    } catch (_) {}
-    finally { setLoading(false) }
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Failed to load notes')
+    } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetchList() }, [fetchList])
 
   const openNote = async (stub) => {
     const request = ++editorRequest.current
-    setIsNew(false)
+    setEditorError(null)
     try {
       const { data } = await notesAPI.get(stub.note_id)
       if (request !== editorRequest.current) return
+      setIsNew(false)
       setSelected(data)
       setTitle(data.title)
       setBody(data.body || '')
       setTicker(data.ticker || '')
-    } catch (_) {}
+    } catch (err) {
+      if (request === editorRequest.current) setEditorError(err.response?.data?.error || 'Failed to open note. Try again.')
+    }
   }
 
   const startNew = () => {
     editorRequest.current += 1
+    setEditorError(null)
     setSelected(null)
     setIsNew(true)
     setTitle('')
@@ -62,19 +71,23 @@ export default function Notes() {
 
   const handleSave = async () => {
     if (!title.trim()) return
+    const request = ++editorRequest.current
+    setEditorError(null)
     setSaving(true)
     try {
       if (isNew) {
         const { data } = await notesAPI.create(
           title.trim(), body, ticker.trim().toUpperCase() || undefined,
         )
-        setSelected(data)
-        setIsNew(false)
+        if (request === editorRequest.current) {
+          setSelected(data)
+          setIsNew(false)
+        }
         await fetchList()
         showToast('Note created')
       } else {
         const { data } = await notesAPI.update(selected.note_id, title.trim(), body)
-        setSelected(data)
+        if (request === editorRequest.current) setSelected(data)
         setNotes((prev) =>
           prev.map((n) =>
             n.note_id === data.note_id
@@ -84,26 +97,33 @@ export default function Notes() {
         )
         showToast('Note saved')
       }
-    } catch (_) {}
-    finally { setSaving(false) }
+    } catch (err) {
+      if (request === editorRequest.current) setEditorError(err.response?.data?.error || 'Failed to save note. Try again.')
+    } finally { setSaving(false) }
   }
 
   const handleDelete = async () => {
     if (!selected) return
     if (!window.confirm('Delete this note?')) return
+    const request = ++editorRequest.current
+    setEditorError(null)
     setDeleting(true)
     try {
       await notesAPI.delete(selected.note_id)
       setNotes((prev) => prev.filter((n) => n.note_id !== selected.note_id))
-      setSelected(null)
-      setIsNew(false)
+      if (request === editorRequest.current) {
+        setSelected(null)
+        setIsNew(false)
+      }
       showToast('Note deleted')
-    } catch (_) {}
-    finally { setDeleting(false) }
+    } catch (err) {
+      if (request === editorRequest.current) setEditorError(err.response?.data?.error || 'Failed to delete note. Try again.')
+    } finally { setDeleting(false) }
   }
 
   const closeEditor = () => {
     editorRequest.current += 1
+    setEditorError(null)
     setSelected(null)
     setIsNew(false)
   }
@@ -114,6 +134,7 @@ export default function Notes() {
     <div className="page-layout">
       <Header title="Notes" />
       <main className="page-content">
+        <ResourceError message={editorError} />
         <div className="notes-layout">
 
           {/* ── List panel ── */}
@@ -128,11 +149,12 @@ export default function Notes() {
               </button>
             </div>
 
+            <ResourceError message={loadError} onRetry={fetchList} retryLabel="Retry notes" />
             {loading ? (
               <div className="notes-loading">
                 <Loader2 size={20} className="spin" />
               </div>
-            ) : notes.length === 0 ? (
+            ) : notes.length === 0 && !loadError ? (
               <div className="empty-state" style={{ padding: '32px 16px' }}>
                 <FileText size={32} opacity={0.3} />
                 <p>No notes yet. Click New to create one.</p>

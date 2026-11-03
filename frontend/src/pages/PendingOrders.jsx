@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Clock, Ban, CheckCircle, Plus, Loader2, X } from 'lucide-react'
 import Header from '../components/Header'
+import ResourceError from '../components/ResourceError'
 import OrderForm from '../components/OrderForm'
 import TickerInput from '../components/TickerInput'
 import { pendingOrdersAPI, stocksAPI } from '../services/api'
@@ -71,6 +72,7 @@ export default function PendingOrders() {
   const { formatPrice } = useRegion()
   const fmt = (n, ticker) => n != null ? formatPrice(n, { from: tickerCurrency(ticker) }) : '—'
 
+  const [loadError, setLoadError] = useState(null)
   const [activeTab, setActiveTab]         = useState('OPEN')
   const [orders, setOrders]               = useState([])
   const [loading, setLoading]             = useState(true)
@@ -87,11 +89,13 @@ export default function PendingOrders() {
 
   const fetchOrders = useCallback(async (status = activeTab) => {
     setLoading(true)
+    setLoadError(null)
     try {
       const { data } = await pendingOrdersAPI.list(status)
       setOrders(data)
-    } catch (_) {}
-    finally { setLoading(false) }
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Failed to load orders')
+    } finally { setLoading(false) }
   }, [activeTab])
 
   useEffect(() => { fetchOrders(activeTab) }, [activeTab])
@@ -148,11 +152,12 @@ export default function PendingOrders() {
             ))}
           </div>
 
+          <ResourceError message={loadError} onRetry={() => fetchOrders()} retryLabel="Retry orders" />
           {loading ? (
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <Loader2 size={22} className="spin" style={{ color: 'var(--text-muted)' }} />
             </div>
-          ) : orders.length === 0 ? (
+          ) : orders.length === 0 && !loadError ? (
             <div className="empty-state">
               <Clock size={36} opacity={0.3} />
               <p>No {activeTab.toLowerCase()} orders.</p>

@@ -3,6 +3,7 @@ import {
   Bell, BellOff, Trash2, Plus, Loader2, CheckCheck,
 } from 'lucide-react'
 import Header from '../components/Header'
+import ResourceError from '../components/ResourceError'
 import TickerInput from '../components/TickerInput'
 import { alertsAPI } from '../services/api'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
@@ -15,6 +16,10 @@ export default function Alerts() {
   const [loadingAlerts, setLoadingAlerts]   = useState(true)
   const [loadingNotifs, setLoadingNotifs]   = useState(true)
   const [showAllNotifs, setShowAllNotifs]   = useState(false)
+
+  const [actionError, setActionError] = useState(null)
+  const [notifsError, setNotifsError] = useState(null)
+  const [alertsError, setAlertsError] = useState(null)
 
   // Create form
   const [ticker, setTicker]           = useState('')
@@ -34,20 +39,24 @@ export default function Alerts() {
 
   const fetchAlerts = useCallback(async () => {
     setLoadingAlerts(true)
+    setAlertsError(null)
     try {
       const { data } = await alertsAPI.list()
       setAlerts(data)
-    } catch (_) {}
-    finally { setLoadingAlerts(false) }
+    } catch (err) {
+      setAlertsError(err.response?.data?.error || 'Failed to load alerts')
+    } finally { setLoadingAlerts(false) }
   }, [])
 
   const fetchNotifs = useCallback(async (unreadOnly = !showAllNotifs) => {
     setLoadingNotifs(true)
+    setNotifsError(null)
     try {
       const { data } = await alertsAPI.notifications(unreadOnly)
       setNotifs(data)
-    } catch (_) {}
-    finally { setLoadingNotifs(false) }
+    } catch (err) {
+      setNotifsError(err.response?.data?.error || 'Failed to load notifications')
+    } finally { setLoadingNotifs(false) }
   }, [showAllNotifs])
 
   useEffect(() => { fetchAlerts() }, [fetchAlerts])
@@ -85,24 +94,28 @@ export default function Alerts() {
   }
 
   const handleDelete = async (alert_id) => {
+    setActionError(null)
     setDeleting(alert_id)
     try {
       await alertsAPI.delete(alert_id)
       setAlerts((prev) => prev.filter((a) => a.alert_id !== alert_id))
       showToast('Alert deleted')
-    } catch (_) {}
-    finally { setDeleting(null) }
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to delete alert. Try again.')
+    } finally { setDeleting(null) }
   }
 
   const handleMarkRead = async (ids) => {
+    setActionError(null)
     setMarking(true)
     try {
       await alertsAPI.markRead(ids)
       setNotifs((prev) =>
         prev.map((n) => ids.includes(n.notif_id) ? { ...n, is_read: true } : n),
       )
-    } catch (_) {}
-    finally { setMarking(false) }
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to mark notifications read. Try again.')
+    } finally { setMarking(false) }
   }
 
   const handleMarkAllRead = () => {
@@ -116,6 +129,7 @@ export default function Alerts() {
     <div className="page-layout">
       <Header title="Alerts" />
       <main className="page-content">
+        <ResourceError message={actionError} />
 
         {/* ── Create alert ── */}
         <section className="card">
@@ -171,11 +185,12 @@ export default function Alerts() {
             </div>
           </div>
 
+          <ResourceError message={alertsError} onRetry={fetchAlerts} retryLabel="Retry alerts" />
           {loadingAlerts ? (
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <Loader2 size={20} className="spin" style={{ color: 'var(--text-muted)' }} />
             </div>
-          ) : alerts.length === 0 ? (
+          ) : alerts.length === 0 && !alertsError ? (
             <div className="empty-state">
               <BellOff size={36} opacity={0.3} />
               <p>No alerts set. Create one above.</p>
@@ -264,11 +279,12 @@ export default function Alerts() {
             </div>
           </div>
 
+          <ResourceError message={notifsError} onRetry={() => fetchNotifs()} retryLabel="Retry notifications" />
           {loadingNotifs ? (
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <Loader2 size={20} className="spin" style={{ color: 'var(--text-muted)' }} />
             </div>
-          ) : notifs.length === 0 ? (
+          ) : notifs.length === 0 && !notifsError ? (
             <div className="empty-state">
               <Bell size={36} opacity={0.3} />
               <p>{showAllNotifs ? 'No notifications.' : 'No unread notifications.'}</p>

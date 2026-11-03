@@ -8,6 +8,7 @@ import { createSafeLogger } from '../src/platform/logging.js';
 import { loadConfig } from '../src/platform/config.js';
 import { migrate } from '../src/platform/migrate.js';
 import { createHarness } from './harness.js';
+import { evaluateAlerts } from '../src/modules/user-tools/service.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const h = await createHarness();
@@ -227,6 +228,316 @@ try {
     const entries = await (await request.get(origin + '/api/watchlists/entries')).json();
     assert.equal(entries.items.length, 1);
     assert.equal(entries.items[0].folderId, folderId);
+  });
+  await scenario('failed note save preserves draft and can be retried', async ({ page, request }) => {
+    await page.goto(origin + '/notes');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByPlaceholder('Note title…').fill('Keep draft');
+    await page.getByPlaceholder('Write your note here…').fill('Keep body');
+    await page.route('**/api/notes', route => route.request().method() === 'POST'
+      ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Save unavailable', requestId: 'audit' } } })
+      : route.continue());
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Save unavailable');
+    await expect(page.getByPlaceholder('Note title…')).toHaveValue('Keep draft');
+    await expect(page.getByPlaceholder('Write your note here…')).toHaveValue('Keep body');
+    await page.unroute('**/api/notes');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.locator('.notes-list')).toContainText('Keep draft');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    const saved = await (await request.get(origin + '/api/notes')).json();
+    assert.equal(saved.items.length, 1);
+  });
+  await scenario('failed notes load offers retry instead of an empty collection', async ({ page, request, headers }) => {
+    assert.equal((await request.post(origin + '/api/notes', { headers, data: { title: 'Loaded after retry', body: 'Body' } })).status(), 201);
+    await page.route('**/api/notes?*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Notes unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/notes');
+    await expect(page.getByRole('alert')).toContainText('Notes unavailable');
+    await expect(page.getByText('No notes yet. Click New to create one.')).toHaveCount(0);
+    await page.unroute('**/api/notes?*');
+    await page.getByRole('button', { name: 'Retry notes', exact: true }).click();
+    await expect(page.locator('.notes-list')).toContainText('Loaded after retry');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+  await scenario('failed note open and delete remain visible and retryable', async ({ page, request, headers }) => {
+    const response = await request.post(origin + '/api/notes', { headers, data: { title: 'Retain note', body: 'Retain content' } });
+    assert.equal(response.status(), 201);
+    const id = (await response.json()).note.id;
+    const path = `**/api/notes/${id}`;
+    await page.route(path, route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Note unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/notes');
+    await page.locator('.note-item').click();
+    await expect(page.getByRole('alert')).toContainText('Note unavailable');
+    await page.unroute(path);
+    await page.locator('.note-item').click();
+    await expect(page.getByPlaceholder('Write your note here…')).toHaveValue('Retain content');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await page.route(path, route => route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Delete unavailable', requestId: 'audit' } } })
+      : route.continue());
+    page.on('dialog', dialog => dialog.accept());
+    await page.getByTitle('Delete note', { exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Delete unavailable');
+    await expect(page.getByPlaceholder('Write your note here…')).toHaveValue('Retain content');
+    await expect(page.locator('.note-item')).toHaveCount(1);
+    await page.unroute(path);
+    await page.getByTitle('Delete note', { exact: true }).click();
+    await expect(page.locator('.note-item')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/notes')).json()).items.length, 0);
+  });
+  await scenario('failed pending order load offers retry', async ({ page, request, headers, instrument }) => {
+    const item = await instrument('AAPL');
+    await request.get(origin + `/api/instruments/${item.id}/quote`);
+    const placed = await request.post(origin + '/api/orders', { headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },
+      data: { instrumentId: item.id, side: 'BUY', type: 'LIMIT', quantity: '1', limitPrice: '1' } });
+    assert.equal(placed.status(), 201);
+    await page.route('**/api/orders?*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Orders unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/pending-orders');
+    await expect(page.locator('main').getByRole('alert')).toContainText('Orders unavailable');
+    await expect(page.getByText('No open orders.', { exact: true })).toHaveCount(0);
+    await page.unroute('**/api/orders?*');
+    await page.getByRole('button', { name: 'Retry orders', exact: true }).click();
+    await expect(page.locator('tbody')).toContainText('AAPL');
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+  });
+  await scenario('failed alerts load and delete offer retry and retain alerts', async ({ page, request, headers, instrument }) => {
+    const item = await instrument('AAPL');
+    assert.equal((await request.post(origin + '/api/alerts', { headers,
+      data: { instrumentId: item.id, condition: 'ABOVE', targetPrice: '100000' } })).status(), 201);
+    await page.route('**/api/alerts?*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Alerts unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/alerts');
+    await expect(page.locator('main').getByRole('alert')).toContainText('Alerts unavailable');
+    await expect(page.getByText('No alerts set. Create one above.')).toHaveCount(0);
+    await page.unroute('**/api/alerts?*');
+    await page.getByRole('button', { name: 'Retry alerts', exact: true }).click();
+    await expect(page.locator('tbody')).toContainText('AAPL');
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    await page.route('**/api/alerts/*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Alert delete unavailable', requestId: 'audit' } } }));
+    await page.getByTitle('Delete alert', { exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Alert delete unavailable');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await page.unroute('**/api/alerts/*');
+    await page.getByTitle('Delete alert', { exact: true }).click();
+    await expect(page.locator('tbody tr')).toHaveCount(0);
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/alerts')).json()).items.length, 0);
+  });
+  await scenario('failed notifications load and mark read offer retry', async ({ page, request, headers, instrument }) => {
+    const item = await instrument('AAPL');
+    await request.get(origin + `/api/instruments/${item.id}/quote`);
+    assert.equal((await request.post(origin + '/api/alerts', { headers,
+      data: { instrumentId: item.id, condition: 'ABOVE', targetPrice: '1' } })).status(), 201);
+    // Run the real worker operation to create a notification; inspect via HTTP only.
+    await evaluateAlerts(h.appPool);
+    await page.route('**/api/notifications?*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Notifications unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/alerts');
+    await expect(page.locator('main').getByRole('alert')).toContainText('Notifications unavailable');
+    await expect(page.getByText('No unread notifications.', { exact: true })).toHaveCount(0);
+    await page.unroute('**/api/notifications?*');
+    await page.locator('main').getByRole('button', { name: 'Retry notifications', exact: true }).click();
+    await expect(page.locator('main .notif-item.unread')).toHaveCount(1);
+    await page.route('**/api/notifications/read', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Mark read unavailable', requestId: 'audit' } } }));
+    await page.locator('main').getByRole('button', { name: 'Mark all read', exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Mark read unavailable');
+    await expect(page.locator('main .notif-item.unread')).toHaveCount(1);
+    await page.unroute('**/api/notifications/read');
+    await page.locator('main').getByRole('button', { name: 'Mark all read', exact: true }).click();
+    await expect(page.locator('main .notif-item.unread')).toHaveCount(0);
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/notifications?unread=true')).json()).items.length, 0);
+  });
+  await scenario('failed watchlist removal retains the entry and offers retry', async ({ page, request, headers, instrument }) => {
+    const item = await instrument('RELIANCE.NS');
+    const response = await request.post(origin + '/api/watchlists/entries', { headers, data: { instrumentId: item.id } });
+    assert.equal(response.status(), 201);
+    const path = `**/api/watchlists/entries/${(await response.json()).entry.id}`;
+    await page.goto(origin + '/watchlist');
+    await expect(page.locator('tbody')).toContainText('RELIANCE.NS');
+    await page.route(path, route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Removal unavailable', requestId: 'audit' } } }));
+    await page.getByTitle('Remove from this list', { exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Removal unavailable');
+    await expect(page.locator('tbody')).toContainText('RELIANCE.NS');
+    await page.unroute(path);
+    await page.getByTitle('Remove from this list', { exact: true }).click();
+    await expect(page.locator('tbody tr')).toHaveCount(0);
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/watchlists/entries')).json()).items.length, 0);
+  });
+  await scenario('failed note open preserves an existing unsaved draft', async ({ page, request, headers }) => {
+    const response = await request.post(origin + '/api/notes', { headers, data: { title: 'Existing', body: 'Existing body' } });
+    const id = (await response.json()).note.id;
+    await page.goto(origin + '/notes');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByPlaceholder('Note title…').fill('Unsaved draft');
+    await page.getByPlaceholder('Write your note here…').fill('Unsaved body');
+    await page.route(`**/api/notes/${id}`, route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Open unavailable', requestId: 'audit' } } }));
+    await page.locator('.note-item').click();
+    await expect(page.getByRole('alert')).toContainText('Open unavailable');
+    await expect(page.getByPlaceholder('Note title…')).toHaveValue('Unsaved draft');
+    await expect(page.getByPlaceholder('Write your note here…')).toHaveValue('Unsaved body');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.locator('.notes-list')).toContainText('Unsaved draft');
+    assert.equal((await (await request.get(origin + '/api/notes')).json()).items.length, 2);
+  });
+  await scenario('late note save and delete cannot replace a newer draft', async ({ page, request }) => {
+    await page.goto(origin + '/notes');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByPlaceholder('Note title…').fill('First saved');
+    const heldSave = gate(), saved = gate();
+    await page.route('**/api/notes', async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      const response = await route.fetch(); saved.release(); await heldSave.promise; await route.fulfill({ response });
+    });
+    try {
+      await page.getByRole('button', { name: 'Save', exact: true }).click(); await saved.promise;
+      await page.getByRole('button', { name: 'New', exact: true }).click();
+      await page.getByPlaceholder('Note title…').fill('Second draft');
+      const finished = page.waitForEvent('requestfinished', r => r.method() === 'POST' && r.url().endsWith('/api/notes'));
+      heldSave.release(); await finished;
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+      await page.unroute('**/api/notes');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.locator('.notes-list')).toContainText('Second draft');
+      const notes = await (await request.get(origin + '/api/notes')).json();
+      assert.deepEqual(notes.items.map((n: { title: string }) => n.title).sort(), ['First saved', 'Second draft']);
+      const first = notes.items.find((n: { title: string }) => n.title === 'First saved');
+      await page.locator('.note-item').filter({ hasText: 'First saved' }).click();
+      await expect(page.getByPlaceholder('Note title…')).toHaveValue('First saved');
+      const heldDelete = gate(), deleted = gate();
+      await page.route(`**/api/notes/${first.id}`, async route => {
+        const response = await route.fetch(); deleted.release(); await heldDelete.promise; await route.fulfill({ response });
+      });
+      try {
+        page.on('dialog', dialog => dialog.accept());
+        await page.getByTitle('Delete note', { exact: true }).click(); await deleted.promise;
+        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByPlaceholder('Note title…').fill('Third draft');
+        const done = page.waitForEvent('requestfinished', r => r.method() === 'DELETE');
+        heldDelete.release(); await done; await renderSettled(page);
+        await expect(page.getByPlaceholder('Note title…')).toHaveValue('Third draft');
+        await page.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(page.locator('.notes-list')).toContainText('Third draft');
+        const final = await (await request.get(origin + '/api/notes')).json();
+        assert.deepEqual(final.items.map((n: { title: string }) => n.title).sort(), ['Second draft', 'Third draft']);
+      } finally { heldDelete.release(); }
+    } finally { heldSave.release(); }
+  });
+  await scenario('notification bell failures remain visible and retryable', async ({ page, request, headers, instrument }) => {
+    const item = await instrument('AAPL');
+    await request.get(origin + `/api/instruments/${item.id}/quote`);
+    assert.equal((await request.post(origin + '/api/alerts', { headers,
+      data: { instrumentId: item.id, condition: 'ABOVE', targetPrice: '1' } })).status(), 201);
+    await evaluateAlerts(h.appPool);
+    await page.route('**/api/notifications?*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Bell load unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/notes');
+    await page.getByTitle('Notifications', { exact: true }).click();
+    const bell = page.locator('.notif-dropdown');
+    await expect(bell.getByRole('alert')).toContainText('Bell load unavailable');
+    await expect(bell.getByText('No unread notifications', { exact: true })).toHaveCount(0);
+    await page.unroute('**/api/notifications?*');
+    await bell.getByRole('button', { name: 'Retry notifications', exact: true }).click();
+    await expect(bell.locator('.notif-dropdown-item')).toHaveCount(1);
+    await page.route('**/api/notifications/read', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Bell mark unavailable', requestId: 'audit' } } }));
+    await bell.getByRole('button', { name: 'Mark all read', exact: true }).click();
+    await expect(bell.getByRole('alert')).toContainText('Bell mark unavailable');
+    await expect(bell.locator('.notif-dropdown-item')).toHaveCount(1);
+    await page.unroute('**/api/notifications/read');
+    await bell.getByRole('button', { name: 'Mark all read', exact: true }).click();
+    await expect(bell.getByText('No unread notifications', { exact: true })).toBeVisible();
+    await expect(bell.getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/notifications?unread=true')).json()).items.length, 0);
+  });
+  await scenario('stock watchlist failures stay visible and can be retried', async ({ page, request, instrument }) => {
+    await instrument('RELIANCE.NS');
+    await page.route('**/api/watchlists', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Watchlist load unavailable', requestId: 'audit' } } }));
+    await page.goto(origin + '/stocks/RELIANCE.NS');
+    await expect(page.locator('main').getByRole('alert')).toContainText('Watchlist load unavailable');
+    await page.unroute('**/api/watchlists');
+    await page.getByRole('button', { name: 'Retry watchlist', exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    await page.route('**/api/watchlists/entries', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Watch unavailable', requestId: 'audit' } } }));
+    await page.getByTitle('Add to watchlist', { exact: true }).click();
+    await page.getByRole('button', { name: 'Watchlist (default)', exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Watch unavailable');
+    await page.unroute('**/api/watchlists/entries');
+    await page.getByTitle('Add to watchlist', { exact: true }).click();
+    await page.getByRole('button', { name: 'Watchlist (default)', exact: true }).click();
+    await expect(page.getByTitle('Remove from watchlist', { exact: true })).toBeVisible();
+    await page.route('**/api/watchlists/entries/*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Unwatch unavailable', requestId: 'audit' } } }));
+    await page.getByTitle('Remove from watchlist', { exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Unwatch unavailable');
+    await expect(page.getByTitle('Remove from watchlist', { exact: true })).toBeVisible();
+    await page.unroute('**/api/watchlists/entries/*');
+    await page.getByTitle('Remove from watchlist', { exact: true }).click();
+    await expect(page.getByTitle('Add to watchlist', { exact: true })).toBeVisible();
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    assert.equal((await (await request.get(origin + '/api/watchlists/entries')).json()).items.length, 0);
+  });
+  await scenario('saving the current note invalidates an older pending open', async ({ page, request, headers }) => {
+    const first = await request.post(origin + '/api/notes', { headers, data: { title: 'Note A', body: 'Body A' } });
+    const second = await request.post(origin + '/api/notes', { headers, data: { title: 'Note B', body: 'Body B' } });
+    assert.equal(first.status(), 201); assert.equal(second.status(), 201);
+    const id = (await second.json()).note.id;
+    await page.goto(origin + '/notes');
+    await page.locator('.note-item').filter({ hasText: 'Note A' }).click();
+    await expect(page.getByPlaceholder('Note title…')).toHaveValue('Note A');
+    const held = gate(), requested = gate();
+    await page.route(`**/api/notes/${id}`, async route => {
+      const response = await route.fetch(); requested.release(); await held.promise; await route.fulfill({ response });
+    });
+    try {
+      await page.locator('.note-item').filter({ hasText: 'Note B' }).click(); await requested.promise;
+      await page.getByPlaceholder('Write your note here…').fill('Saved A');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByText('Note saved', { exact: true })).toBeVisible();
+      const done = page.waitForEvent('requestfinished', r => r.url().endsWith(`/api/notes/${id}`));
+      held.release(); await done; await renderSettled(page);
+      await expect(page.getByPlaceholder('Note title…')).toHaveValue('Note A');
+      await expect(page.getByPlaceholder('Write your note here…')).toHaveValue('Saved A');
+      const b = await (await request.get(origin + `/api/notes/${id}`)).json();
+      assert.equal(b.note.body, 'Body B');
+    } finally { held.release(); }
+  });
+  await scenario('failed watchlist folder create and rename preserve entered names', async ({ page, request }) => {
+    await page.goto(origin + '/watchlist');
+    await page.getByTitle('New list', { exact: true }).click();
+    await page.getByPlaceholder('e.g. Tech Stocks').fill('Keep list');
+    await page.route('**/api/watchlists/folders', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Create list unavailable', requestId: 'audit' } } }));
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(page.getByPlaceholder('e.g. Tech Stocks')).toHaveValue('Keep list');
+    await expect(page.locator('.modal-card').getByRole('alert')).toContainText('Create list unavailable');
+    await page.unroute('**/api/watchlists/folders');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(page.locator('.wl-tab-name').filter({ hasText: 'Keep list' })).toHaveCount(1);
+    await page.locator('.wl-tab').filter({ hasText: 'Keep list' }).dblclick();
+    await page.locator('.wl-tab-rename').fill('Revised list');
+    await page.route('**/api/watchlists/folders/*', route => route.fulfill({ status: 503,
+      json: { error: { code: 'UNAVAILABLE', message: 'Rename unavailable', requestId: 'audit' } } }));
+    await page.locator('.wl-tab-rename').press('Enter');
+    await expect(page.locator('.wl-tab-rename')).toHaveValue('Revised list');
+    await expect(page.locator('main').getByRole('alert')).toContainText('Rename unavailable');
+    await page.unroute('**/api/watchlists/folders/*');
+    await page.locator('.wl-tab-rename').press('Enter');
+    await expect(page.locator('.wl-tab-name').filter({ hasText: 'Revised list' })).toHaveCount(1);
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    const folders = await (await request.get(origin + '/api/watchlists/folders')).json();
+    assert.equal(folders.items.filter((f: { name: string }) => f.name === 'Revised list').length, 1);
   });
 } finally {
   await browser?.close();

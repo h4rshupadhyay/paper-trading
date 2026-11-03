@@ -5,6 +5,7 @@ import {
   ShoppingCart, RefreshCw, ChevronLeft, ChevronDown,
 } from 'lucide-react'
 import Header from '../components/Header'
+import ResourceError from '../components/ResourceError'
 import PriceChart from '../components/PriceChart'
 import OrderForm from '../components/OrderForm'
 import { Skeleton } from '../components/LoadingSkeleton'
@@ -47,6 +48,7 @@ function InstrumentDetail({ ticker }) {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [showOrder, setShowOrder] = useState(false)
+  const [watchlistError, setWatchlistError] = useState(null)
   const [inWatchlist, setInWatchlist] = useState(false)
   const [wlLoading, setWlLoading] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(null)
@@ -69,11 +71,14 @@ function InstrumentDetail({ ticker }) {
   }, [ticker])
 
   const checkWatchlist = useCallback(async () => {
+    setWatchlistError(null)
     try {
       const { data } = await watchlistAPI.get()
       setInWatchlist(data.watchlist?.some((w) => w.ticker === ticker))
       setFolders(data.folders || [])
-    } catch (_) {}
+    } catch (err) {
+      setWatchlistError(err.response?.data?.error || 'Failed to load watchlist')
+    }
   }, [ticker])
 
   useEffect(() => {
@@ -93,16 +98,20 @@ function InstrumentDetail({ ticker }) {
   }, [])
 
   const handleUnwatch = async () => {
+    setWatchlistError(null)
     setWlLoading(true)
     try {
       await watchlistAPI.remove(ticker)
       setInWatchlist(false)
-    } catch (_) {}
+    } catch (err) {
+      setWatchlistError(err.response?.data?.error || 'Failed to unwatch instrument. Try again.')
+    }
     finally { setWlLoading(false) }
   }
 
   const handleAddToFolder = async (folderId) => {
     setShowFolderPicker(false)
+    setWatchlistError(null)
     setWlLoading(true)
     try {
       await watchlistAPI.add(ticker)
@@ -113,7 +122,9 @@ function InstrumentDetail({ ticker }) {
         if (item) await watchlistAPI.moveItem(item.watchlist_id, folderId)
       }
       setInWatchlist(true)
-    } catch (_) {}
+    } catch (err) {
+      setWatchlistError(err.response?.data?.error || 'Failed to watch instrument. Try again.')
+    }
     finally { setWlLoading(false) }
   }
 
@@ -132,6 +143,7 @@ function InstrumentDetail({ ticker }) {
       <Header />
 
       <main className="page-content">
+        <ResourceError message={watchlistError} onRetry={checkWatchlist} retryLabel="Retry watchlist" />
         {/* Back */}
         <button className="back-btn" onClick={() => navigate(-1)}>
           <ChevronLeft size={16} /> Back

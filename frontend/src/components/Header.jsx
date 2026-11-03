@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, REGIONS, tickerCurrency } from '../context/RegionContext'
 import StockSearch from './StockSearch'
+import ResourceError from './ResourceError'
 import { alertsAPI, stocksAPI } from '../services/api'
 import { convertDisplayCurrency } from '../services/contracts'
 
@@ -12,13 +13,18 @@ function NotificationBell() {
   const [notifs, setNotifs]   = useState([])
   const [open, setOpen]       = useState(false)
   const [marking, setMarking] = useState(false)
+  const [actionError, setActionError] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const dropdownRef           = useRef(null)
 
   const fetchUnread = async () => {
+    setLoadError(null)
     try {
       const { data } = await alertsAPI.notifications(true)
       setNotifs(data)
-    } catch (_) {}
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Failed to load notifications')
+    }
   }
 
   useEffect(() => {
@@ -41,12 +47,14 @@ function NotificationBell() {
   const handleMarkAll = async () => {
     const ids = notifs.map((n) => n.notif_id)
     if (!ids.length) return
+    setActionError(null)
     setMarking(true)
     try {
       await alertsAPI.markRead(ids)
       setNotifs([])
-    } catch (_) {}
-    finally { setMarking(false) }
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to mark notifications read. Try again.')
+    } finally { setMarking(false) }
   }
 
   const unread = notifs.length
@@ -79,7 +87,9 @@ function NotificationBell() {
               </button>
             )}
           </div>
-          {notifs.length === 0 ? (
+          <ResourceError message={actionError} />
+          <ResourceError message={loadError} onRetry={fetchUnread} retryLabel="Retry notifications" />
+          {notifs.length === 0 && !loadError ? (
             <p className="notif-dropdown-empty">No unread notifications</p>
           ) : (
             <ul className="notif-dropdown-list">

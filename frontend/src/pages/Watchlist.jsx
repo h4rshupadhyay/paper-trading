@@ -5,6 +5,7 @@ import {
   RefreshCw, ShoppingCart, Plus, X, Loader2,
 } from 'lucide-react'
 import Header from '../components/Header'
+import ResourceError from '../components/ResourceError'
 import OrderForm from '../components/OrderForm'
 import { SkeletonTable } from '../components/LoadingSkeleton'
 import TickerInput from '../components/TickerInput'
@@ -18,6 +19,7 @@ export default function Watchlist() {
   const [folders, setFolders]         = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [removing, setRemoving]       = useState(null)
   const [orderTarget, setOrderTarget] = useState(null)
   const [addTicker, setAddTicker]     = useState('')
@@ -28,9 +30,11 @@ export default function Watchlist() {
   // Tab state — null = "Watchlist" (uncategorised)
   const [activeTab, setActiveTab]         = useState(null)
   const [renamingTab, setRenamingTab]     = useState(null)
+  const [renamingFolder, setRenamingFolder] = useState(false)
   const [renameVal, setRenameVal]         = useState('')
   const [showNewTab, setShowNewTab]       = useState(false)
   const [newTabName, setNewTabName]       = useState('')
+  const [folderError, setFolderError] = useState(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [addToFolderId, setAddToFolderId]   = useState(null)
 
@@ -61,12 +65,14 @@ export default function Watchlist() {
   useEffect(() => { setAddToFolderId(activeTab) }, [activeTab])
 
   const handleRemove = async (watchlist_id) => {
+    setActionError(null)
     setRemoving(watchlist_id)
     try {
       await watchlistAPI.removeItem(watchlist_id)
       setItems((prev) => prev.filter((i) => i.watchlist_id !== watchlist_id))
-    } catch (_) {}
-    finally { setRemoving(null) }
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to remove entry. Try again.')
+    } finally { setRemoving(null) }
   }
 
   const handleAdd = async (e) => {
@@ -102,16 +108,17 @@ export default function Watchlist() {
   const handleCreateFolder = async () => {
     const name = newTabName.trim()
     if (!name || creatingFolder) return
-    setShowNewTab(false)
-    setNewTabName('')
+    setFolderError(null)
     setCreatingFolder(true)
     try {
       const { data } = await watchlistAPI.createFolder(name)
+      setShowNewTab(false)
+      setNewTabName('')
       await fetchWatchlist()
       setActiveTab(data.folder_id)   // jump to the new tab
       showToast(`List "${name}" created`)
     } catch (err) {
-      showToast(err.response?.data?.error || 'Failed to create list')
+      setFolderError(err.response?.data?.error || 'Failed to create list. Try again.')
     } finally {
       setCreatingFolder(false)
     }
@@ -119,14 +126,16 @@ export default function Watchlist() {
 
   const handleRenameTab = async (folder_id) => {
     const name = renameVal.trim()
-    setRenamingTab(null)
-    if (!name) return
+    if (!name || renamingFolder) return
+    setActionError(null)
+    setRenamingFolder(true)
     try {
       await watchlistAPI.renameFolder(folder_id, name)
+      setRenamingTab(null)
       await fetchWatchlist()
     } catch (err) {
-      showToast(err.response?.data?.error || 'Failed to rename')
-    }
+      setActionError(err.response?.data?.error || 'Failed to rename list. Try again.')
+    } finally { setRenamingFolder(false) }
   }
 
   const handleDeleteTab = async (folder_id, name, e) => {
@@ -205,6 +214,7 @@ export default function Watchlist() {
                 {renamingTab !== null && renamingTab === tab.folder_id ? (
                   <input
                     className="wl-tab-rename"
+                    disabled={renamingFolder}
                     value={renameVal}
                     autoFocus
                     style={{ width: Math.max(60, renameVal.length * 8) + 'px' }}
@@ -241,7 +251,7 @@ export default function Watchlist() {
 
             <button
               className="wl-tab-add"
-              onClick={() => setShowNewTab(true)}
+              onClick={() => { setFolderError(null); setShowNewTab(true) }}
               title="New list"
             >
               <Plus size={14} />
@@ -255,11 +265,12 @@ export default function Watchlist() {
 
           {/* Tab content */}
           <div className="wl-content">
-            {error && <div className="error-banner">{error}</div>}
+            <ResourceError message={error} onRetry={fetchWatchlist} retryLabel="Retry watchlist" />
+            <ResourceError message={actionError} />
 
             {loading ? (
               <div style={{ padding: '16px' }}><SkeletonTable rows={6} cols={5} /></div>
-            ) : activeItems.length === 0 ? (
+            ) : activeItems.length === 0 && !error ? (
               <div className="empty-state">
                 <Star size={36} opacity={0.25} />
                 <p>This list is empty. Add tickers above.</p>
@@ -349,6 +360,7 @@ export default function Watchlist() {
                 </button>
               </div>
               <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <ResourceError message={folderError} />
                 <label className="form-label">
                   List name
                   <input
