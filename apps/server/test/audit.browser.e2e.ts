@@ -214,6 +214,20 @@ try {
       assert.ok(Math.abs(Number(await wick.getAttribute('y2')) - expectedY(90)) < 1, 'Wick low matches price90');
     }
   });
+  await scenario('watchlist Add form retains the selected folder UUID', async ({ page, request, headers, instrument }) => {
+    await instrument('RELIANCE.NS');
+    const created = await request.post(origin + '/api/watchlists/folders', { headers, data: { name: 'Selected list' } });
+    assert.equal(created.status(), 201);
+    const folderId = (await created.json()).folder.id;
+    await page.goto(origin + '/watchlist');
+    await page.locator('.add-ticker-form .folder-select').selectOption(folderId);
+    await page.locator('.add-ticker-form input').fill('RELIANCE.NS');
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.locator('tbody')).toContainText('RELIANCE.NS');
+    const entries = await (await request.get(origin + '/api/watchlists/entries')).json();
+    assert.equal(entries.items.length, 1);
+    assert.equal(entries.items[0].folderId, folderId);
+  });
 } finally {
   await browser?.close();
   if (web && web.exitCode == null) {

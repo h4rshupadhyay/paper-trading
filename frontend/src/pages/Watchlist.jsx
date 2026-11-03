@@ -171,7 +171,7 @@ export default function Watchlist() {
               <select
                 className="folder-select"
                 value={addToFolderId ?? ''}
-                onChange={(e) => setAddToFolderId(e.target.value === '' ? null : parseInt(e.target.value))}
+                onChange={(e) => setAddToFolderId(e.target.value === '' ? null : e.target.value)}
                 disabled={adding}
               >
                 <option value="">Uncategorised</option>
