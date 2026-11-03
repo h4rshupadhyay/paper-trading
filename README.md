@@ -1,42 +1,113 @@
-# PaperTrade — PERN paper trading
+# PaperTrade
 
-React + Express + Node.js + PostgreSQL, with a separately runnable Node worker. The application includes cookie-based authentication, an INR paper account, instrument discovery and charts, market/limit/stop/stop-limit orders, exact accounting, portfolio valuation/history, watchlist folders, notes, alerts and notifications.
+A paper-trading app for exploring stocks, practising trades, and tracking a portfolio with virtual money. Each account starts with **₹10,00,000** and includes watchlists, price alerts, and a trading journal.
 
-New accounts receive **₹10,00,000**. Orders use server observations, full fills, fractional quantities up to four decimals, no fees/slippage and no leverage. Pending orders reserve neither cash nor shares. Every fill atomically records the order, execution, cash movement and position changes.
+## Features
 
-## Market data modes
+- Search stocks across US, Indian, UK, European, Japanese, and Hong Kong markets, with price charts and historical data.
+- Place market, limit, stop, and stop-limit orders; review order status and execution history.
+- Track cash, holdings, profit and loss, and portfolio value over time.
+- Organise watchlists into folders and save notes against stocks.
+- Set one-shot price alerts and receive in-app notifications.
+- Switch regions and display currencies while keeping account balances in INR.
 
-- `MARKET_PROVIDER=yahoo` uses real display data. Live instruments remain **view-only** until their quote/session/freshness/corporate-action metadata passes the documented acceptance gate. An available endpoint alone does not prove execution eligibility.
-- `MARKET_PROVIDER=fixture` explicitly uses simulated development/test observations. It supports the complete end-to-end workflow and is rejected in production. It is never an automatic fallback after provider failure.
+**Market-data availability:** real market data is currently available for viewing. Trading against it remains disabled until the provider meets the app's data requirements. To try the full trading workflow locally, select the simulated-data mode described below.
 
-See [provider evidence and limitations](docs/PERN_PROVIDER_VALIDATION.md). Financial values are persisted as PostgreSQL decimals and returned as strings. Missing portfolio observations produce unavailable totals rather than invented zero values. INR accounting is independent of the selected display region/currency.
+## Getting started
 
-## Run the PERN stack
+You'll need Docker with Docker Compose. Run these commands from the repository root.
 
-Use Docker with Compose. Copy the example and supply four independent random hex secrets (32 random bytes each):
+### 1. Configure the environment
 
 ```bash
 cp .env.pern-compose.example .env.pern-compose.local
-node --input-type=module -e 'import {randomBytes} from "node:crypto"; console.log(randomBytes(32).toString("hex"))'
-# Repeat generation for each secret, fill the file, and select yahoo or explicit fixture mode.
+```
+
+Open `.env.pern-compose.local` and fill in `PAPER_ADMIN_PASSWORD`, `PAPER_OWNER_PASSWORD`, `PAPER_APP_PASSWORD`, and `CSRF_SECRET` with four independently generated random hex values. For example, run this once for each value:
+
+```bash
+openssl rand -hex 32
+```
+
+Choose a data mode in the same file:
+
+| Setting | Behaviour |
+| --- | --- |
+| `MARKET_PROVIDER=fixture` | Simulated prices for trying trades, orders, alerts, and portfolio tracking locally. |
+| `MARKET_PROVIDER=yahoo` | Real market data for browsing and charts; instruments are currently view-only. |
+
+The example defaults to `yahoo`. Set it to `fixture` for a working trading demo. Simulated data is never used automatically when a provider fails, and fixture mode is disabled in production.
+
+### 2. Start the app
+
+```bash
 docker compose --env-file .env.pern-compose.local -f compose.pern.yml up --build --detach --wait
 ```
 
-Browse the configured `PUBLIC_ORIGIN` (default `http://localhost:3000`). The stack uses its own `paper-pern` project and `pern_data` volume. It does not mount Oracle/Python files or old volumes. A one-shot owner-role migration must succeed before API/worker start; neither runtime process migrates or seeds users. A normal stop preserves data:
+Open **http://localhost:3000**, create an account, and sign in. If you change the web port, update both `PERN_WEB_PORT` and `PUBLIC_ORIGIN` in the environment file.
+
+The stack starts the web app, API, background worker, and PostgreSQL database. Database migrations run before the API and worker start. Account and trading data persist across restarts.
+
+### 3. Stop the app
 
 ```bash
 docker compose --env-file .env.pern-compose.local -f compose.pern.yml down
 ```
 
-Do not add `--volumes` for data you want to keep. This is a local development setup by default. For production, use real provider acceptance, HTTPS, `NODE_ENV=production`, stable secrets, monitored backups and the trusted proxy arrangement described in [setup](docs/PERN_SETUP.md).
+This preserves the database volume. Adding `--volumes` deletes its stored data.
 
-## Local development and checks
+## Trading rules
 
-Use Node 24.22.2 and npm 11.19.1 (pinned in `.node-version`/`package.json`).
+- Accounts use INR; changing the display currency does not change the account balance.
+- Long positions only, with full fills and quantities up to four decimal places.
+- No fees, slippage, leverage, or short selling.
+- Pending orders reserve neither cash nor shares. Available funds and holdings are checked when an order fills.
+- Trades use server-side prices. Missing or unsuitable market data blocks execution; missing valuation data is shown as unavailable.
+- Automatic split and dividend adjustments are not supported.
+
+## Tech stack
+
+| Component | Tools |
+| --- | --- |
+| Web app | React, Vite, React Router, Recharts |
+| API | Node.js, Express, TypeScript |
+| Database | PostgreSQL, `pg`, versioned SQL migrations |
+| Background jobs | Node.js worker for orders, alerts, market refreshes, and portfolio snapshots |
+| Authentication | Server-side cookie sessions with CSRF protection |
+| Deployment | Docker Compose, nginx |
+| Tests | Vitest, Supertest, Playwright |
+
+## Development
+
+Use **Node.js 24.22.2** and **npm 11.19.1**. Install the backend and frontend dependencies:
 
 ```bash
 npm ci
 npm ci --prefix frontend
+```
+
+For development outside Docker, follow the [local database and environment setup](docs/PERN_SETUP.md). With the database configured, apply migrations and build the backend:
+
+```bash
+npm run db:migrate
+npm run build
+```
+
+Run the API, worker, and frontend in separate terminals with their environment configured:
+
+```bash
+npm run start:api
+npm run start:worker
+npm run dev --prefix frontend
+```
+
+The frontend runs on port 3000 and proxies `/api` to the API on port 3001.
+
+### Running checks
+
+Backend integration and browser tests use a separate disposable PostgreSQL instance:
+
+```bash
 npm run test:db:up
 npm run typecheck
 npm run test:foundation
@@ -46,19 +117,28 @@ npm run test:e2e
 npm run test:db:down
 ```
 
-Browser checks use Playwright and installed Google Chrome; set `CHROME_EXECUTABLE` when Chrome is elsewhere. They create and clean only unique databases in the isolated test instance. Backend tests include concurrency, rollback, idempotency, sessions/CSRF, cash/position reconciliation, stop/expiry/cancel races, missing data, worker coordination and compiled-process restart. Browser acceptance exercises all ten retained routes.
+Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
 
-See the [completion verification and review record](docs/superpowers/plans/2026-11-02-pern-completion-results.md) for current acceptance evidence, provider limits and deferred minor findings.
+## Project structure
 
-For a separate persistent development database, configure `.env.pern.local` as described in [setup](docs/PERN_SETUP.md), then explicitly run migrations/build. Run the API on port3001, the Vite UI on3000 and the worker in another terminal. The bundled Vite proxy keeps `/api` on the browser's origin.
+```text
+frontend/                  React app
+apps/server/src/
+  modules/                 Identity, accounts, market data, trading, portfolio, and user tools
+  platform/                Database, configuration, logging, and HTTP utilities
+  api.ts                   API entrypoint
+  worker.ts                Background worker entrypoint
+apps/server/migrations/    Database migrations
+apps/server/test/          Backend and browser tests
+packages/contracts/        Shared API types
+deploy/pern/               Dockerfiles, nginx configuration, and database role setup
+docs/                      Setup, operations, and design documentation
+```
 
-## Layout
+## Documentation
 
-- `apps/server/src/modules`: identity, accounts, market data, trading, portfolio and user tools.
-- `apps/server/src/api.ts`, `worker.ts`: separate compiled runtime entrypoints.
-- `apps/server/migrations`: ordered, transactional SQL upgrades with an owner/runtime role split.
-- `frontend`: retained React UI and resource-API adapters.
-- `packages/contracts`: shared foundation DTOs.
-- `deploy/pern`, `compose.pern.yml`: static web/proxy and Node/PostgreSQL runtime.
+- [Setup and operations](docs/PERN_SETUP.md) — local configuration, deployment, health checks, and backups.
+- [Market-data support](docs/PERN_PROVIDER_VALIDATION.md) — provider coverage and requirements for enabling trading with real data.
+- [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.
 
-The previous Flask/Oracle implementation is preserved under `backend`, `database`, and `docker-compose.yml` for reference; it is not used by the PERN stack. [Legacy documentation](docs/LEGACY_README.md) describes that old runtime. No Oracle data import is part of this fresh-database migration.
+The earlier Flask/Oracle application remains in `backend/`, `database/`, and `docker-compose.yml` for reference. See the [legacy README](docs/LEGACY_README.md) for that version; the current app uses `compose.pern.yml`.

@@ -1,31 +1,35 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { RegionProvider } from './context/RegionContext'
 import Sidebar from './components/Sidebar'
 
-// Pages
-import Login          from './pages/Login'
-import Register       from './pages/Register'
-import Dashboard      from './pages/Dashboard'
-import StockDetail    from './pages/StockDetail'
-import Orders         from './pages/Orders'
-import Watchlist      from './pages/Watchlist'
-import PendingOrders  from './pages/PendingOrders'
-import Alerts         from './pages/Alerts'
-import Notes          from './pages/Notes'
-import Analytics      from './pages/Analytics'
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const StockDetail = lazy(() => import('./pages/StockDetail'))
+const Orders = lazy(() => import('./pages/Orders'))
+const Watchlist = lazy(() => import('./pages/Watchlist'))
+const PendingOrders = lazy(() => import('./pages/PendingOrders'))
+const Alerts = lazy(() => import('./pages/Alerts'))
+const Notes = lazy(() => import('./pages/Notes'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+
+function PageLoading() {
+  return (
+    <div className="splash" role="status" aria-label="Loading page">
+      <div className="splash-spinner" aria-hidden="true" />
+    </div>
+  )
+}
 
 /** Wraps authenticated routes — redirects to /login if not logged in */
 function ProtectedLayout() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-      <div className="splash">
-        <div className="splash-spinner" />
-      </div>
-    )
+    return <PageLoading />
   }
 
   if (!user) return <Navigate to="/login" replace />
@@ -34,7 +38,9 @@ function ProtectedLayout() {
     <div className="app-shell">
       <Sidebar />
       <div className="main-area">
-        <Outlet />
+        <Suspense fallback={<PageLoading />}>
+          <Outlet />
+        </Suspense>
       </div>
     </div>
   )
@@ -45,7 +51,7 @@ function PublicLayout() {
   const { user, loading } = useAuth()
   if (loading) return null
   if (user) return <Navigate to="/dashboard" replace />
-  return <Outlet />
+  return <Suspense fallback={<PageLoading />}><Outlet /></Suspense>
 }
 
 export default function App() {

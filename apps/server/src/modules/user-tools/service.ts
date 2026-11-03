@@ -9,7 +9,7 @@ const folderFields = 'id,name,is_default AS "isDefault"';
 const noteFields = 'n.id,n.instrument_id AS "instrumentId",i.symbol,n.title,n.body,n.created_at AS "createdAt",n.updated_at AS "updatedAt"';
 const noteFrom = 'notes n LEFT JOIN instruments i ON i.id=n.instrument_id';
 const alertFields = `a.id,a.instrument_id AS "instrumentId",i.symbol,i.currency,a.condition,a.target_price AS "targetPrice",
-  a.active,a.triggered_at AS "triggeredAt"`;
+  a.active,a.created_at AS "createdAt",a.triggered_at AS "triggeredAt"`;
 const entryFields = `e.id,e.folder_id AS "folderId",e.instrument_id AS "instrumentId",i.symbol,i.name,i.currency,q.price,
   CASE WHEN q.price IS NULL OR i.paused THEN 'UNAVAILABLE'
     WHEN q.observed_at<now()-interval '60 seconds' OR q.observed_at>now()+interval '5 seconds' THEN 'STALE'

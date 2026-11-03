@@ -118,6 +118,17 @@ describe('owned tools HTTP and SQL', () => {
     expect((await mutate('delete', `/notes/${note.id}`)).status).toBe(204); expect((await get(`/notes/${note.id}`)).status).toBe(404);
   });
 
+  it('returns persisted alert creation timestamps on creation and listing, including after triggering', async () => {
+    const response = await mutate('post', '/alerts', { instrumentId, condition: 'ABOVE', targetPrice: '100' });
+    expect(response.status).toBe(201);
+    const alert = response.body.alert;
+    const stored = (await harness.ownerPool.query('SELECT created_at FROM price_alerts WHERE id=$1', [alert.id])).rows[0]!.created_at.toISOString();
+    expect(alert.createdAt).toBe(stored);
+    expect((await get('/alerts')).body.items[0]).toMatchObject({ id: alert.id, createdAt: stored });
+    await quote('100'); await evaluateAlerts(harness.appPool);
+    expect((await get('/alerts')).body.items[0]).toMatchObject({ id: alert.id, active: false, createdAt: stored, triggeredAt: expect.any(String) });
+  });
+
   it('evaluates exact inclusive thresholds once across competing workers and marks owned notifications read', async () => {
     await quote('100.00000001');
     const above = await mutate('post', '/alerts', { instrumentId, condition: 'ABOVE', targetPrice: '100.00000001' });

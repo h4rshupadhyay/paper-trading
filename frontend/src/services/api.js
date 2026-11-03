@@ -121,6 +121,14 @@ export const alertsAPI={
   create:async(symbol,condition,targetPrice)=>mapped(api.post('/alerts',{instrumentId:(await instrument(symbol)).id,condition,targetPrice:String(targetPrice)}),data=>alert(data.alert)),
   delete:id=>api.delete(`/alerts/${id}`),
   notifications:async unread=>({data:(await all('/notifications',unread?{unread:'true'}:{})).map(notification)}),
-  markRead:ids=>api.post('/notifications/read',{ids}),
+  markRead:async ids=>{
+    const items=[]
+    let response
+    for(let offset=0;offset<ids.length;offset+=100){
+      response=await api.post('/notifications/read',{ids:ids.slice(offset,offset+100)})
+      items.push(...response.data.items)
+    }
+    return {...response,data:{items}}
+  },
 }
 export default api

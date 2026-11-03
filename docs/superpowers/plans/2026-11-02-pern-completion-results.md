@@ -37,12 +37,16 @@ The resumed checks use Node24.22.2/npm11.19.1, matching repository pins. Local P
 
 Database checks use only the dedicated disposable test instance and separate PERN acceptance project. Process/volume persistence is exercised; backup restoration, power-loss durability and deployment capacity are not claimed.
 
-## Deferred minor findings
+## Originally deferred minor findings — resolved locally
 
-1. Pending-order side cells read `order_side` while the adapter returns `side`, leaving that column blank.
-2. Mark-all-read sends every fetched notification ID in one request; with more than100 unread notifications, the backend's100-ID limit rejects it. Individual reads remain bounded by that contract.
-3. Alert responses omit `createdAt`, leaving the retained Created column unavailable.
-4. The React bundle exceeds Vite's500kB advisory; no capacity or download-performance claim is made.
+On 3 November 2026, the user requested fixes for all four findings. The follow-up changes are verified and remain uncommitted; see the [fix plan and verification record](2026-11-03-pern-deferred-ui.md).
+
+1. Pending-order side cells now consume `side`; production browser acceptance verifies BUY/SELL labels and styles.
+2. Mark-all-read sends sequential batches of at most100 IDs through the shared adapter. Boundary/failure tests and browser acceptance cover both the Alerts page and header dropdown with more than100 unread notifications.
+3. Alert creation/list responses include the persisted `createdAt`; PostgreSQL/HTTP and browser checks verify the retained Created column, including after triggering.
+4. Route pages load on demand. The production entry chunk is approximately258.35kB, the largest chunk380.75kB, and all24 JavaScript chunks are below500kB. The Vite advisory is gone; no measured download-performance or capacity claim is made.
+
+Follow-up verification passes:20 unit tests,195 integration tests,14 frontend tests, typecheck, backend/web builds and all ten production browser routes. Browser acceptance also covers delayed route chunks, authentication redirects, both bulk-read controls, order cancellation and FX expiry.
 
 ## Rulings and accepted limits
 

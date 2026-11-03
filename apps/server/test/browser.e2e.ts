@@ -18,13 +18,37 @@ try {
  const db=new URL('postgresql://127.0.0.1:55439');db.username=String(h.appPool.options.user);db.password=String(h.appPool.options.password);db.pathname=String(h.appPool.options.database);
  let output='';const launch=(args:string[],env:NodeJS.ProcessEnv)=>{const child=spawn(process.execPath,args,{cwd:root,env:{...process.env,...env},stdio:['ignore','pipe','pipe']});child.stdout?.on('data',c=>output+=c);child.stderr?.on('data',c=>output+=c);processes.push(child);return child;};
  launch(['apps/server/dist/src/api.js'],{NODE_ENV:'test',PORT:String(apiPort),DATABASE_URL:db.href,PUBLIC_ORIGIN:origin,CSRF_SECRET:'browser-test-secret-longer-than-thirty-two-bytes',MARKET_PROVIDER:'fixture'});
- launch(['frontend/node_modules/vite/bin/vite.js','frontend','--host','127.0.0.1','--port',String(webPort),'--strictPort'],{VITE_API_TARGET:`http://127.0.0.1:${apiPort}`});
+ launch(['frontend/node_modules/vite/bin/vite.js','preview','frontend','--host','127.0.0.1','--port',String(webPort),'--strictPort'],{VITE_API_TARGET:`http://127.0.0.1:${apiPort}`});
  await expect.poll(async()=>{try{return(await fetch(`${origin}/api/health/ready`)).status}catch{return 0}},{timeout:15000}).toBe(200);
  browser=await chromium.launch({executablePath:process.env.CHROME_EXECUTABLE??'/usr/bin/google-chrome',args:['--no-sandbox'],headless:true});
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(`${origin}/register`);await page.getByLabel('Username',{exact:true}).fill('browser_trader');await page.getByLabel('Email').fill('browser@example.com');await page.getByLabel('Password',{exact:true}).fill('browser secure password');await page.getByLabel('Confirm Password').fill('browser secure password');await page.getByRole('button',{name:'Create Account'}).click();await expect(page.getByText('Account created!')).toBeVisible();
  await expect(page).toHaveURL(/\/login$/);await page.getByLabel('Username',{exact:true}).fill('browser_trader');await page.getByLabel('Password',{exact:true}).fill('browser secure password');await page.getByRole('button',{name:'Sign In'}).click();await expect(page).toHaveURL(/\/dashboard$/);
  const badResponses:string[]=[];page.on('response',response=>{if(response.url().includes('/api/')&&response.status()>=400)badResponses.push(`${response.status()} ${response.url()}`)});
+ // React Router retains the current page during a lazy client-side transition.
+ let releaseNotes!:()=>void;let notesRequested=false;
+ const notesReady=new Promise<void>(resolve=>{releaseNotes=resolve;});
+ await page.route('**/assets/Notes-*.js',async route=>{notesRequested=true;await notesReady;await route.continue();});
+ try {
+  await page.getByRole('link',{name:'Notes',exact:true}).click();
+  await expect.poll(()=>notesRequested).toBe(true);
+  await expect(page.locator('.sidebar')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
+ } finally {releaseNotes();}
+ await expect(page.locator('main')).toContainText('My Notes');
+ await page.unroute('**/assets/Notes-*.js');
+ // An initial deep link has no previous page and shows the loading fallback.
+ let releaseOrders!:()=>void;let ordersRequested=false;
+ const ordersReady=new Promise<void>(resolve=>{releaseOrders=resolve;});
+ await page.route('**/assets/Orders-*.js',async route=>{ordersRequested=true;await ordersReady;await route.continue();});
+ const ordersNavigation=page.goto(`${origin}/orders`);
+ try {
+  await expect.poll(()=>ordersRequested).toBe(true);
+  await expect(page.locator('.sidebar')).toBeVisible();
+  await expect(page.getByRole('status',{name:'Loading page',exact:true})).toBeVisible();
+ } finally {releaseOrders();await ordersNavigation;}
+ await expect(page.locator('main')).toBeVisible();
+ await page.unroute('**/assets/Orders-*.js');
  for(const path of ['/dashboard','/stocks/RELIANCE.NS','/orders','/watchlist','/pending-orders','/alerts','/notes','/analytics']) {
   await page.goto(origin+path);await expect(page.locator('main')).toBeVisible();await expect(page.locator('.splash')).toHaveCount(0);await page.waitForLoadState('networkidle');
  }
@@ -40,7 +64,9 @@ try {
  const folder=await page.request.post(`${origin}/api/watchlists/folders`,{headers,data:{name:'Browser list'}});assert.equal(folder.status(),201);const folderId=(await folder.json()).folder.id;
  const watched=await page.request.post(`${origin}/api/watchlists/entries`,{headers,data:{instrumentId,folderId}});assert.equal(watched.status(),201);
  const note=await page.request.post(`${origin}/api/notes`,{headers,data:{title:'Browser journal',body:'Verified note',instrumentId}});assert.equal(note.status(),201);
- const alert=await page.request.post(`${origin}/api/alerts`,{headers,data:{instrumentId,condition:'ABOVE',targetPrice:'100'}});assert.equal(alert.status(),201);await evaluateAlerts(h.appPool);await sampleSnapshots(h.appPool);
+ const alert=await page.request.post(`${origin}/api/alerts`,{headers,data:{instrumentId,condition:'ABOVE',targetPrice:'100'}});assert.equal(alert.status(),201);
+ const createdAlert=(await alert.json()).alert;
+ await evaluateAlerts(h.appPool);await sampleSnapshots(h.appPool);
  const pending=await page.request.post(`${origin}/api/orders`,{headers:{...headers,'Idempotency-Key':'browser-pending-01'},data:{instrumentId,side:'BUY',type:'STOP_LIMIT',quantity:'1',stopPrice:'100',limitPrice:'200'}});assert.equal(pending.status(),201);await evaluatePending(h.appPool);
  for(const [path,text] of [['/watchlist','RELIANCE.NS'],['/notes','Browser journal'],['/alerts','RELIANCE.NS'],['/pending-orders','FILLED'],['/orders','FILLED'],['/analytics','Portfolio Composition']] as const){await page.goto(origin+path);await expect(page.locator('main')).toContainText(text);}
  await expect(page.locator('.composition-stats')).toContainText('₹9,99,550.00');
@@ -49,6 +75,18 @@ try {
  await page.goto(`${origin}/stocks/AAPL`);await page.getByRole('button',{name:/^Trade$/}).click();await page.locator('.zk-inputs input').first().fill('1.0000');await page.locator('.zk-btn-submit').click();await expect(page.locator('.zk-card')).toHaveCount(0);
  await page.goto(`${origin}/dashboard`);const usdRow=page.locator('tbody tr').filter({hasText:'AAPL'});await expect(usdRow.locator('td').nth(4)).toHaveText('₹12,450.00');
  const reviewFailures:unknown[]=[];
+ await page.goto(`${origin}/alerts`);
+ const storedAlert=(await h.ownerPool.query('SELECT created_at FROM price_alerts WHERE id=$1',[createdAlert.id])).rows[0];
+ const createdDate=await page.evaluate(value=>new Date(value).toLocaleDateString(),storedAlert.created_at.toISOString());
+ try {await expect(page.locator('tbody tr').filter({hasText:'RELIANCE.NS'}).locator('td').nth(4)).toHaveText(createdDate);}catch(error){reviewFailures.push(error);}
+ // Pending rows must show both directions from the resource API's side field.
+ const pendingSell=await page.request.post(`${origin}/api/orders`,{headers:{...headers,'Idempotency-Key':'browser-pending-sell-label'},data:{instrumentId,side:'SELL',type:'LIMIT',quantity:'1',limitPrice:'200'}});
+ assert.equal(pendingSell.status(),201);
+ await page.goto(`${origin}/pending-orders`);
+ const sellRow=page.locator('tbody tr').filter({hasText:'RELIANCE.NS'});
+ try {await expect(sellRow.locator('td').nth(1).locator('.type-badge.neg')).toHaveText('SELL');}catch(error){reviewFailures.push(error);}
+ const pendingSellId=(await pendingSell.json()).order.id;
+ assert.equal((await page.request.post(`${origin}/api/orders/${pendingSellId}/cancel`,{headers})).status(),200);
  await page.goto(`${origin}/stocks/AAPL`);
  try {await expect(page.locator('.price-chart .recharts-yAxis').first()).toContainText('₹12,');}catch(error){reviewFailures.push(error);}
  const gap=await page.request.post(`${origin}/api/orders`,{headers:{...headers,'Idempotency-Key':'browser-gap-cancel'},data:{instrumentId,side:'BUY',type:'STOP_LIMIT',quantity:'1',stopPrice:'100',limitPrice:'90'}});
@@ -56,13 +94,31 @@ try {
  await page.goto(`${origin}/pending-orders`);await page.getByRole('button',{name:'TRIGGERED',exact:true}).click();
  try {
   const row=page.locator('tbody tr').filter({hasText:'RELIANCE.NS'});
+  await expect(row.locator('td').nth(1).locator('.type-badge.pos')).toHaveText('BUY');
   await expect(row.getByTitle('Cancel order')).toBeVisible();await row.getByTitle('Cancel order').click();
   await expect(row).toHaveCount(0);
   assert.equal((await(await page.request.get(`${origin}/api/orders/${gapId}`)).json()).order.status,'CANCELLED');
  }catch(error){reviewFailures.push(error);}
- if(reviewFailures.length)throw new AggregateError(reviewFailures,'Review regressions: converted chart axis and triggered-order cancellation');
+ if(reviewFailures.length)throw new AggregateError(reviewFailures,'Review regressions: pending order sides, converted chart axis and triggered-order cancellation');
  await page.goto(`${origin}/notes`);await page.getByRole('button',{name:'New',exact:true}).click();await page.getByPlaceholder('Note title…').fill('Saved through React');await page.locator('.notes-editor-panel textarea').fill('Persistent UI note');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.locator('.notes-list')).toContainText('Saved through React');await page.reload();await expect(page.locator('.notes-list')).toContainText('Saved through React');
  await page.goto(`${origin}/dashboard`);await expect(page.locator('tbody')).toContainText('RELIANCE.NS');await page.waitForLoadState('networkidle');await page.screenshot({path:'/tmp/pern-dashboard.png',fullPage:true});
+ // Both mark-all controls must traverse notification pages and honor the 100-ID write limit.
+ const readBatchSizes:number[]=[];
+ page.on('request',request=>{if(request.method()==='POST'&&request.url()===`${origin}/api/notifications/read`)readBatchSizes.push(request.postDataJSON().ids.length);});
+ const seedNotifications=async(count:number)=>h.ownerPool.query(`INSERT INTO notifications(user_id,message)
+   SELECT u.id,'Batch notification '||n FROM users u CROSS JOIN generate_series(1,$1::int) n WHERE u.username='browser_trader'`,[count]);
+ const unreadCount=async()=>Number((await h.ownerPool.query(`SELECT count(*) FROM notifications n JOIN users u ON u.id=n.user_id WHERE u.username='browser_trader' AND n.read_at IS NULL`)).rows[0].count);
+ await seedNotifications(205);
+ const pageUnread=await unreadCount();
+ await page.goto(`${origin}/alerts`);await expect(page.locator('.notif-count-badge')).toHaveText(`${pageUnread} unread`);
+ await page.locator('main').getByRole('button',{name:'Mark all read',exact:true}).click();
+ await expect.poll(unreadCount).toBe(0);await expect(page.locator('.notif-count-badge')).toHaveCount(0);
+ await seedNotifications(101);
+ await page.goto(`${origin}/dashboard`);await page.getByTitle('Notifications',{exact:true}).click();
+ await expect(page.locator('.notif-dropdown-item')).toHaveCount(8);
+ await page.locator('.notif-dropdown').getByRole('button',{name:'Mark all read',exact:true}).click();
+ await expect.poll(unreadCount).toBe(0);await expect(page.locator('.notif-dropdown-empty')).toHaveText('No unread notifications');
+ assert.ok(readBatchSizes.length>=5);assert.ok(readBatchSizes.every(size=>size>0&&size<=100));
  assert.deepEqual(errors,[],'No React crashes on any retained route');assert.deepEqual(badResponses,[],'No API contract failures from retained pages');
  // Advance only the browser clock: sessions and provider fixtures remain valid server-side.
  const fxObservedAt=new Date(Date.now()-86400000+30000).toISOString();let fxOutage=false;
@@ -76,5 +132,5 @@ try {
  await expect(page.locator('.stock-price')).toHaveText('₹—');
  await expect(page.locator('[role="status"]').filter({hasText:'FX estimates'})).toContainText('unavailable');
  const logout=await page.request.post(`${origin}/api/auth/logout`,{headers});assert.equal(logout.status(),204);await page.reload();await expect(page).toHaveURL(/\/login$/);
- console.log('PASS: 10 retained routes; browser register/login/market buy; owned tools, alert/pending execution, analytics, logout; no browser or API errors');
+ console.log('PASS: 10 production routes; lazy navigation; register/login/market buy; owned tools, alert dates, BUY/SELL labels, both bulk notification controls, analytics, FX expiry and logout; no browser or API errors');
 } finally {await browser?.close();for(const child of processes.reverse())await stop(child);await h.close();}

@@ -185,8 +185,8 @@ export default function PendingOrders() {
                         </div>
                       </td>
                       <td>
-                        <span className={`type-badge ${o.order_side === 'BUY' ? 'pos' : 'neg'}`}>
-                          {o.order_side}
+                        <span className={`type-badge ${o.side === 'BUY' ? 'pos' : 'neg'}`}>
+                          {o.side}
                         </span>
                       </td>
                       <td>
