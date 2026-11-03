@@ -1,8 +1,7 @@
-import { stocksAPI } from '../services/api'
 /**
  * TickerInput — controlled text input with live ticker autocomplete.
  *
- * Uses the same pre-loaded tickers.json cache as StockSearch.
+ * Shares catalogue loading and local filtering with StockSearch.
  * Unlike StockSearch, this is a plain form input — it doesn't navigate.
  *
  * Props
@@ -15,38 +14,8 @@ import { stocksAPI } from '../services/api'
  */
 import { useState, useRef, useEffect } from 'react'
 import { useRegion } from '../context/RegionContext'
-
-// Re-use the same module-level cache as StockSearch (defined outside the module
-// to survive re-renders and route changes).
-let _tickerCache = null
-let _loadPromise  = null
-
-async function loadTickers() {
-  if (_tickerCache) return _tickerCache
-  if (_loadPromise)  return _loadPromise
-  _loadPromise = stocksAPI.catalogue()
-    .then(({data}) => data)
-    .then((data) => { _tickerCache = Array.isArray(data) ? data : []; return _tickerCache })
-    .catch(() => { _tickerCache = []; return [] })
-  return _loadPromise
-}
-
-function filterLocal(tickers, q, regionId) {
-  const upper = q.toUpperCase()
-  const lower = q.toLowerCase()
-  const exact = [], prefix = [], contains = []
-
-  for (const t of tickers) {
-    if (t.r && t.r !== regionId) continue
-    const sym  = t.s.toUpperCase()
-    const name = t.n.toLowerCase()
-    if (sym === upper)                                      exact.push(t)
-    else if (sym.startsWith(upper) || name.startsWith(lower)) prefix.push(t)
-    else if (sym.includes(upper)   || name.includes(lower))   contains.push(t)
-    if (exact.length + prefix.length + contains.length >= 8) break
-  }
-  return [...exact, ...prefix, ...contains].slice(0, 8)
-}
+import useTickerCatalogue from '../hooks/useTickerCatalogue'
+import { filterTickers } from '../services/tickerCatalogue'
 
 export default function TickerInput({
   value,
@@ -56,33 +25,29 @@ export default function TickerInput({
   disabled = false,
   className = '',
 }) {
+  const { catalogue, retry } = useTickerCatalogue()
   const [results, setResults]     = useState([])
   const [open, setOpen]           = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
   const wrapperRef = useRef(null)
   const { regionId } = useRegion()
 
-  // Pre-load on mount
-  useEffect(() => {
-    if (!_tickerCache) loadTickers()
-  }, [])
-
   // Filter on every value change
   useEffect(() => {
     const q = value.trim()
     if (!q) { setResults([]); setOpen(false); return }
-    if (_tickerCache) {
-      const local = filterLocal(_tickerCache, q, regionId)
+    if (catalogue) {
+      const local = filterTickers(catalogue, q, regionId, 8)
       if (local.length) {
         setResults(local.map((t) => ({ ticker: t.s, company_name: t.n })))
-        setOpen(true)
+        setOpen(wrapperRef.current?.contains(document.activeElement) ?? false)
         setActiveIdx(-1)
         return
       }
     }
     setResults([])
     setOpen(false)
-  }, [value, regionId])
+  }, [value, regionId, catalogue])
 
   // Close on outside click
   useEffect(() => {
@@ -128,7 +93,7 @@ export default function TickerInput({
         autoComplete="off"
         spellCheck="false"
         onChange={(e) => onChange(e.target.value.toUpperCase())}
-        onFocus={() => results.length > 0 && setOpen(true)}
+        onFocus={() => { retry(); if (results.length > 0) setOpen(true) }}
         onKeyDown={handleKeyDown}
       />
       {open && results.length > 0 && (

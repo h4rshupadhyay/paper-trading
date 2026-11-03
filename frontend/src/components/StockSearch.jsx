@@ -1,72 +1,15 @@
 /**
- * StockSearch — instant client-side search from a pre-loaded ticker list.
- *
- * Architecture:
- *  • On first mount, fetches /api/stocks/tickers (tickers.json, ~30 KB, cached 24 h).
- *  • All subsequent filtering is pure JS — zero API calls on every keystroke.
- *  • If the query matches nothing locally AND looks like a valid ticker symbol,
- *    falls back to the backend search API (covers newly-added / exotic tickers).
- *  • Price data is never fetched in the dropdown — the full quote loads on the
- *    detail page only.
+ * StockSearch — filter the shared instrument catalogue locally, then use a
+ * debounced remote search for symbols without local matches. Quotes load only
+ * on the detail page.
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Loader2 } from 'lucide-react'
 import { stocksAPI } from '../services/api'
 import { useRegion } from '../context/RegionContext'
-
-// Module-level cache — shared across all component instances, persists for the
-// lifetime of the browser tab.  Avoids re-fetching on route changes.
-let _tickerCache = null           // resolved array once loaded
-let _loadPromise  = null           // in-flight promise (prevents duplicate fetches)
-
-async function loadTickers() {
-  if (_tickerCache) return _tickerCache
-  if (_loadPromise)  return _loadPromise
-
-  _loadPromise = stocksAPI.catalogue()
-    .then(({data}) => data)
-    .then((data) => {
-      _tickerCache = Array.isArray(data) ? data : []
-      return _tickerCache
-    })
-    .catch(() => {
-      _tickerCache = []
-      return []
-    })
-
-  return _loadPromise
-}
-
-/** Filter tickers.json entries against a query string, within the given region. */
-function filterLocal(tickers, q, regionId) {
-  const upper = q.toUpperCase()
-  const lower = q.toLowerCase()
-
-  const exact    = []
-  const prefix   = []
-  const contains = []
-
-  for (const t of tickers) {
-    // Region gate: only show tickers tagged for this region (field `r`)
-    if (t.r && t.r !== regionId) continue
-
-    const sym  = t.s.toUpperCase()
-    const name = t.n.toLowerCase()
-
-    if (sym === upper) {
-      exact.push(t)
-    } else if (sym.startsWith(upper) || name.startsWith(lower)) {
-      prefix.push(t)
-    } else if (sym.includes(upper) || name.includes(lower)) {
-      contains.push(t)
-    }
-
-    if (exact.length + prefix.length + contains.length >= 10) break
-  }
-
-  return [...exact, ...prefix, ...contains].slice(0, 10)
-}
+import useTickerCatalogue from '../hooks/useTickerCatalogue'
+import { filterTickers } from '../services/tickerCatalogue'
 
 export default function StockSearch() {
   const [query, setQuery]         = useState('')
@@ -74,19 +17,13 @@ export default function StockSearch() {
   const [loading, setLoading]     = useState(false)
   const [open, setOpen]           = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
-  const [ready, setReady]         = useState(!!_tickerCache)
+  const { catalogue, retry } = useTickerCatalogue()
 
   const { regionId }  = useRegion()
   const navigate      = useNavigate()
   const wrapperRef    = useRef(null)
   const inputRef      = useRef(null)
   const apiTimerRef   = useRef(null)   // debounce for API fallback only
-
-  // Pre-load the ticker list immediately on mount
-  useEffect(() => {
-    if (_tickerCache) return   // already loaded
-    loadTickers().then(() => setReady(true))
-  }, [])
 
   // Clear results when region changes
   useEffect(() => {
@@ -108,11 +45,11 @@ export default function StockSearch() {
       return
     }
 
-    if (_tickerCache) {
-      const local = filterLocal(_tickerCache, q, regionId)
+    if (catalogue) {
+      const local = filterTickers(catalogue, q, regionId, 10)
       if (local.length > 0) {
         setResults(local.map((t) => ({ ticker: t.s, company_name: t.n })))
-        setOpen(true)
+        setOpen(wrapperRef.current?.contains(document.activeElement) ?? false)
         setActiveIdx(-1)
         setLoading(false)
         return
@@ -135,7 +72,7 @@ export default function StockSearch() {
       }, 350)
     }
     return () => { cancelled = true; clearTimeout(apiTimerRef.current) }
-  }, [query, regionId])
+  }, [query, regionId, catalogue])
 
   // Close on outside click
   useEffect(() => {
@@ -186,11 +123,11 @@ export default function StockSearch() {
           type="text"
           className="search-input"
           aria-label="Search stocks"
-          placeholder={ready ? 'Search stocks… (e.g. AAPL, Tesla)' : 'Loading tickers…'}
+          placeholder="Search stocks… (e.g. AAPL, Tesla)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => results.length > 0 && setOpen(true)}
+          onFocus={() => { retry(); if (results.length > 0) setOpen(true) }}
           autoComplete="off"
           spellCheck="false"
         />
