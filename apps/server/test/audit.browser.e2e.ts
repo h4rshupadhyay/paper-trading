@@ -94,7 +94,7 @@ try {
     await page.goto(origin + '/stocks/AAPL');
     await expect(page.locator('.stock-ticker')).toHaveText('AAPL');
     const held = gate(), requested = gate();
-    await page.route(`**/api/instruments/${apple.id}/quote`, async route => {
+    await page.route(`**/api/instruments/${apple.id}/snapshot`, async route => {
       const response = await route.fetch();
       requested.release();
       await held.promise;
@@ -107,7 +107,7 @@ try {
       await page.locator('.search-item').filter({ hasText: 'RELIANCE.NS' }).click();
       await expect(page).toHaveURL(/\/stocks\/RELIANCE.NS$/);
       await expect(page.locator('.stock-ticker')).toHaveText('RELIANCE.NS');
-      const finished = page.waitForEvent('requestfinished', request => request.url().endsWith(`/api/instruments/${apple.id}/quote`));
+      const finished = page.waitForEvent('requestfinished', request => request.url().endsWith(`/api/instruments/${apple.id}/snapshot`));
       held.release();
       await finished;
       await renderSettled(page);

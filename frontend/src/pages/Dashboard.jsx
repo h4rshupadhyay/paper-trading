@@ -87,12 +87,14 @@ export default function Dashboard() {
   const [loading, setLoading]       = useState(true)
   const [snapLoading, setSnapLoading] = useState(true)
   const [error, setError]           = useState(null)
+  const [historyError, setHistoryError] = useState(null)
 
   const fetchPortfolio = useCallback(async () => {
     setLoading(true)
     try {
       const { data } = await portfolioAPI.get()
       setPortfolio(data)
+      setError(null)
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to load portfolio')
     } finally {
@@ -105,8 +107,9 @@ export default function Dashboard() {
     try {
       const { data } = await portfolioAPI.snapshots(730)
       setSnapshots(data.snapshots || [])
+      setHistoryError(null)
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to load portfolio history')
+      setHistoryError(e.response?.data?.error || 'Failed to load portfolio history')
     } finally { setSnapLoading(false) }
   }, [])
 
@@ -148,7 +151,7 @@ export default function Dashboard() {
                 positive={portfolio.total_pl_pct >= 0}
               />
               <StatCard
-                label="Total P/L"
+                label="Unrealized P/L"
                 value={fmt(portfolio.total_pl)}
                 positive={portfolio.total_pl >= 0}
               />
@@ -166,6 +169,7 @@ export default function Dashboard() {
               <RefreshCw size={15} />
             </button>
           </div>
+          {historyError && <div className="error-banner" role="alert">{historyError}</div>}
           <PortfolioChart snapshots={snapshots} loading={snapLoading} formatCurrency={formatCurrency} region={region} />
         </section>
 

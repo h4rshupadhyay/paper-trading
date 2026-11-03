@@ -281,16 +281,14 @@ export default function Watchlist() {
                   <thead>
                     <tr>
                       <th>Stock</th>
-                      <th>Sector</th>
                       <th>Price</th>
-                      <th>Change</th>
                       <th>Added</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeItems.map((item) => (
-                      <tr key={item.ticker}>
+                      <tr key={item.watchlist_id}>
                         <td>
                           <div
                             className="stock-cell clickable"
@@ -300,16 +298,7 @@ export default function Watchlist() {
                             <span className="company-name">{item.company_name}</span>
                           </div>
                         </td>
-                        <td className="text-muted">{item.sector || '—'}</td>
                         <td className="fw-medium">{fmtPrice(item.price, item.ticker)}</td>
-                        <td>
-                          {item.change_pct != null ? (
-                            <span className={`change-badge ${item.change_pct >= 0 ? 'pos' : 'neg'}`}>
-                              {item.change_pct >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                              {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
-                            </span>
-                          ) : '—'}
-                        </td>
                         <td className="text-muted">
                           {item.added_at ? new Date(item.added_at).toLocaleDateString() : '—'}
                         </td>

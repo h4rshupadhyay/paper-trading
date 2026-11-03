@@ -164,11 +164,11 @@ describe('compiled foundation lifecycle', () => {
     expect(migrateWithCli().status).toBe(0);
     const witness = (await harness.appPool.query(`INSERT INTO users(username,email,password_hash)
       VALUES('future_user','future@example.com','test-only-witness') RETURNING id,username,email,password_hash`)).rows;
-    await harness.ownerPool.query('UPDATE schema_migrations SET version=5 WHERE version=4');
+    await harness.ownerPool.query('UPDATE schema_migrations SET version=6 WHERE version=5');
     const refused = migrateWithCli();
     expect(refused.status).toBe(1);
     expect(refused.stderr.trim()).toBe('Database migration failed');
-    expect((await harness.ownerPool.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 5 }]);
+    expect((await harness.ownerPool.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 6 }]);
     expect((await harness.appPool.query('SELECT id,username,email,password_hash FROM users')).rows).toEqual(witness);
   });
 });

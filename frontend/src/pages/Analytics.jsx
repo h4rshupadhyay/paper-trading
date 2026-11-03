@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ResponsiveContainer, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -87,29 +87,33 @@ export default function Analytics() {
     } finally { setLoading(false) }
   }, [])
 
+  const snapshotVersion = useRef(0)
   const fetchSnapshots = useCallback(async (days = period) => {
+    const version = ++snapshotVersion.current
     setSnapLoading(true)
     try {
       const { data } = await portfolioAPI.snapshots(days)
-      setSnapshots(data.snapshots || [])
+      if (version === snapshotVersion.current) setSnapshots(data.snapshots || [])
     } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to load snapshots')
-    } finally { setSnapLoading(false) }
+      if (version === snapshotVersion.current) setError(err?.response?.data?.error || 'Failed to load snapshots')
+    } finally { if (version === snapshotVersion.current) setSnapLoading(false) }
   }, [period])
 
   useEffect(() => { fetchPortfolio() }, [fetchPortfolio])
-  useEffect(() => { fetchSnapshots(period) }, [period])
+  useEffect(() => { fetchSnapshots(period); return () => { snapshotVersion.current++ } }, [period])
 
   // ── Derived data ─────────────────────────────────────────────
 
-  const holdings = portfolio?.quality==='incomplete' ? [] : portfolio?.holdings || []
+  const holdings = portfolio?.holdings || []
+  const valuationAvailable = !!portfolio && portfolio.quality !== 'incomplete'
+  const valuedHoldings = valuationAvailable ? holdings : []
 
   // Helper: format a value tied to a specific ticker's native currency
   const fmtH = (n) => formatCurrency(n)
 
   // Sector allocation — aggregate INR values, then format for display
   const sectorMap = {}
-  for (const h of holdings) {
+  for (const h of valuedHoldings) {
     const s = h.sector || 'Other'
     const baseValue = (h.market_value ?? 0)
     sectorMap[s] = (sectorMap[s] || 0) + baseValue
@@ -129,16 +133,16 @@ export default function Analytics() {
   ] : []
 
   // Win / loss breakdown
-  const winners = holdings.filter((h) => h.pl > 0)
-  const losers  = holdings.filter((h) => h.pl < 0)
-  const flat    = holdings.filter((h) => h.pl === 0)
+  const winners = valuedHoldings.filter((h) => h.pl > 0)
+  const losers  = valuedHoldings.filter((h) => h.pl < 0)
+  const flat    = valuedHoldings.filter((h) => h.pl === 0)
 
   const totalPL    = holdings.reduce((s, h) => s + (h.pl || 0), 0)
   const bestHolder = holdings.slice().sort((a, b) => (b.pl_pct || 0) - (a.pl_pct || 0))[0]
   const worstHolder = holdings.slice().sort((a, b) => (a.pl_pct || 0) - (b.pl_pct || 0))[0]
 
   // P/L per holding for bar chart (sorted by pl_pct)
-  const plBarData = holdings
+  const plBarData = valuedHoldings
     .slice()
     .sort((a, b) => (b.pl_pct || 0) - (a.pl_pct || 0))
     .map((h) => ({
@@ -168,6 +172,8 @@ export default function Analytics() {
           <div className="error-banner" role="alert">{error}</div>
         )}
 
+        {portfolio?.quality === 'incomplete' && <p role="status">Valuation unavailable. You still own {holdings.length} holding(s). Refresh after market data recovers. <button className="btn btn-sm btn-outline" onClick={fetchPortfolio}>Refresh valuation</button></p>}
+
         {/* ── Summary stats ── */}
         <section className="stats-grid">
           <StatCard
@@ -175,15 +181,15 @@ export default function Analytics() {
             value={formatCurrency(portfolio?.total_value)}
           />
           <StatCard
-            label="Total P/L"
+            label="Unrealized P/L"
             value={formatCurrency(portfolio?.total_pl)}
-            sub={pct(portfolio?.total_pl_pct ?? 0)}
+            sub={valuationAvailable && portfolio?.total_pl_pct != null ? pct(portfolio.total_pl_pct) : undefined}
             positive={portfolio?.total_pl >= 0}
           />
           <StatCard
-            label="Win Rate"
-            value={`${winRate}%`}
-            sub={`${winners.length}W · ${losers.length}L · ${flat.length} flat`}
+            label="Profitable holdings"
+            value={valuationAvailable && holdings.length ? `${winRate}%` : '—'}
+            sub={valuationAvailable ? `${winners.length} positive · ${losers.length} negative · ${flat.length} flat` : 'Valuation unavailable'}
             positive={winRate >= 50 ? true : winRate < 40 ? false : undefined}
           />
           <StatCard
@@ -264,16 +270,18 @@ export default function Analytics() {
         </section>
 
         {/* ── Allocation charts row ── */}
-        {holdings.length > 0 && (
+        {valuationAvailable && holdings.length > 0 && (
           <div className="analytics-charts-row">
 
             {/* Sector breakdown */}
             <section className="card">
               <h2 className="card-title" style={{ marginBottom: 16 }}>
                 <PieIcon size={15} style={{ marginRight: 6 }} />
-                Sector Allocation
+                Sector Data
               </h2>
-              {sectorData.length === 0 ? (
+              {sectorData.every(item => item.name === 'Unclassified') ? (
+                <p className="text-muted">Sector data unavailable for these holdings.</p>
+              ) : sectorData.length === 0 ? (
                 <div className="empty-state" style={{ padding: '32px 0' }}>No holdings</div>
               ) : (
                 <>
@@ -398,7 +406,7 @@ export default function Analytics() {
         )}
 
         {/* ── Top/Bottom performers ── */}
-        {holdings.length >= 2 && (
+        {valuationAvailable && holdings.length >= 2 && (
           <div className="analytics-charts-row">
             <section className="card">
               <h2 className="card-title" style={{ marginBottom: 12 }}>

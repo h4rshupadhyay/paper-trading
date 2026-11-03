@@ -8,7 +8,7 @@ it('upgrades an existing foundation without changing opening cash or creating an
   const { registerUser }=await import('../src/modules/identity/registration.js');
   const original=await registerUser(h.appPool,{username:'upgrade',email:'upgrade@example.com',password:'upgrade password'},async()=> 'hash');
   await migrate(h.ownerPool);
-  expect(await readSchemaVersion(h.appPool)).toBe(4);
+  expect(await readSchemaVersion(h.appPool)).toBe(5);
   expect((await h.appPool.query('SELECT cash_balance,cash_sequence FROM accounts WHERE id=$1',[original.account.id])).rows).toEqual([{cash_balance:'1000000.00',cash_sequence:'1'}]);
   expect((await h.appPool.query('SELECT count(*)::int AS n FROM cash_movements')).rows).toEqual([{n:1}]);
   expect((await h.appPool.query('SELECT count(*)::int AS n FROM watchlist_folders')).rows).toEqual([{n:1}]);

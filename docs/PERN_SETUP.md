@@ -18,7 +18,7 @@ unset MIGRATION_DATABASE_URL
 npm run start:api
 ```
 
-In another shell, load only the runtime URL/origin/secret/provider and run `npm run start:worker`. Run `npm run dev --prefix frontend` for the web UI. API and worker require schema version4. Migrations from foundation1 through4 preserve existing users, opening cash, sessions and folders; newer schema versions are refused. Do not edit an applied migration in a deployed database. Future changes require a new version.
+In another shell, load only the runtime URL/origin/secret/provider and run `npm run start:worker`. Run `npm run dev --prefix frontend` for the web UI. API and worker require schema version4. Migrations from foundation1 through5 preserve existing users, opening cash, sessions and folders; newer schema versions are refused. Do not edit an applied migration in a deployed database. Future changes require a new version.
 
 Sessions last24 hours unless revoked, and survive process restarts. Keep CSRF_SECRET stable across restarts. All unsafe requests require the exact configured Origin; authenticated mutations additionally require `X-CSRF-Token` from `/api/auth/csrf`. There are no bearer tokens in browser localStorage. Decimal input quantities/prices must be strings and unsupported fields fail validation. Every order requires an `Idempotency-Key`; reuse it for a retry of the same intent, and use a new key for a different intent.
 

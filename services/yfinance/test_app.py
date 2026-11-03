@@ -41,6 +41,35 @@ class ServiceTests(unittest.TestCase):
         self.addCleanup(self.patcher.stop)
         self.addCleanup(self.service.executor.shutdown, wait=True)
         FakeTicker.metadata = copy.deepcopy(META)
+    def test_statistics_preserve_zero_signed_pe_and_raw_units(self):
+        info = dict(symbol='VOD.L', currency='GBp', open=123.5, dayHigh=125, dayLow=120,
+                    previousClose=122, volume=0, averageVolume=9007199254740993,
+                    marketCap=123456789, trailingPE=-5.25, fiftyTwoWeekHigh=160,
+                    fiftyTwoWeekLow=90, sector='Communication Services', industry='Telecom',
+                    longBusinessSummary='A telecom company.')
+        with patch.object(FakeTicker, 'info', info, create=True):
+            status, result = app.route(self.service, '/statistics?symbol=VOD.L')
+        self.assertEqual(status, 200)
+        self.assertEqual(result['statistics']['open'], '123.5')
+        self.assertEqual(result['statistics']['volume'], '0')
+        self.assertEqual(result['statistics']['averageVolume'], '9007199254740993')
+        self.assertEqual(result['statistics']['trailingPE'], '-5.25')
+        self.assertEqual(result['rawCurrency'], 'GBp')
+        self.assertEqual(result['sector'], 'Communication Services')
+
+    def test_statistics_missing_fields_are_null_but_empty_or_wrong_unit_response_fails(self):
+        for info, status in [({}, 503), ({'symbol':'OTHER','currency':'USD','open':10},503),
+                             ({'symbol':'VOD.L','currency':'AUD','open':10},503),
+                             ({'symbol':'VOD.L','currency':'GBp','volume':0,'open':float('nan')},200)]:
+            self.service.cache.clear()
+            with patch.object(FakeTicker,'info',info,create=True):
+                actual, data=app.route(self.service,'/statistics?symbol=VOD.L')
+            self.assertEqual(actual,status)
+            if status==200:
+                self.assertIsNone(data['statistics']['open'])
+                self.assertEqual(data['statistics']['volume'],'0')
+                self.assertIsNone(data['statistics']['trailingPE'])
+
     def test_pence_quote_preserves_decimal_and_observation_on_cache_hit(self):
         result = self.service.quote('VOD.L')
         self.assertEqual(result['instrument'], dict(symbol='VOD.L',name='Vodafone',exchange='LSE',currency='GBP',multiplier='0.01',kind='EQUITY',tradable=True,unavailableReason=None))

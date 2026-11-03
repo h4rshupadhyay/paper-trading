@@ -45,7 +45,7 @@ async function all(path,params={},maxItems=10000) {
 function stock(item){rememberInstrument(item);return {...item,ticker:item.symbol,company_name:item.name}}
 function note(item){return {...item,note_id:item.id,ticker:item.symbol??'',created_at:item.createdAt,updated_at:item.updatedAt}}
 function entry(item,defaultId){rememberInstrument({id:item.instrumentId,symbol:item.symbol,currency:item.currency});return {...item,
-  watchlist_id:item.id,folder_id:item.folderId===defaultId?null:item.folderId,ticker:item.symbol,company_name:item.name,price:displayNumber(item.price),change_pct:null}}
+  watchlist_id:item.id,added_at:item.createdAt,folder_id:item.folderId===defaultId?null:item.folderId,ticker:item.symbol,company_name:item.name,price:displayNumber(item.price),change_pct:null}}
 function alert(item){rememberInstrument({id:item.instrumentId,symbol:item.symbol,currency:item.currency});return {...item,
   alert_id:item.id,ticker:item.symbol,target_price:displayNumber(item.targetPrice),is_active:item.active,created_at:item.createdAt,triggered_at:item.triggeredAt}}
 function notification(item){return {...item,notification_id:item.id,notif_id:item.id,is_read:!!item.readAt,created_at:item.createdAt}}
@@ -63,6 +63,17 @@ export const stocksAPI={
     return {data:{...stock(item),...data.quote,price:displayNumber(data.quote?.price),change_pct:null,
       quality:data.quality,unavailableReason:data.unavailableReason,tradable:item.tradable,
       observedAt:data.quote?.observedAt,provider:item.provider}}
+  },
+  snapshot:async symbol=>{
+    const item=await instrument(symbol)
+    const {data}=await api.get(`/instruments/${item.id}/snapshot`)
+    const statistics=data.statistics
+    const values={}
+    for(const [field,key] of Object.entries({open:'open',day_high:'dayHigh',day_low:'dayLow',previous_close:'previousClose',volume:'volume',avg_volume:'averageVolume',market_cap:'marketCap',pe_ratio:'trailingPE','52w_high':'fiftyTwoWeekHigh','52w_low':'fiftyTwoWeekLow'}))values[field]=displayNumber(statistics?.[key])
+    return {data:{...stock(item),...data.quote,...values,price:displayNumber(data.quote?.price),change_pct:null,
+      quality:data.quality,unavailableReason:data.unavailableReason,tradable:item.tradable,provider:item.provider,
+      statisticsQuality:statistics?.quality??'unavailable',statisticsFetchedAt:statistics?.fetchedAt??null,
+      sector:statistics?.sector,industry:statistics?.industry,description:statistics?.description}}
   },
   history:async(symbol,period='1mo',interval='1d')=>{
     const item=await instrument(symbol)

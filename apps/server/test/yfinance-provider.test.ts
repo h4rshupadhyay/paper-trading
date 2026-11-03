@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { YfinanceProvider } from '../src/modules/market-data/yfinance-provider.js';
 import type { Instrument } from '../src/modules/market-data/provider.js';
 
@@ -33,4 +33,54 @@ it('forwards raw chart options and propagates sidecar outages',async()=>{
   const url=new URL(requested);expect(url.searchParams.get('period')).toBe('1y');expect(url.searchParams.get('interval')).toBe('1wk');
   await expect(client({},503).quote(instrument)).rejects.toThrow(/503/);
   expect(()=>new YfinanceProvider('file:///etc/passwd')).toThrow();
+});
+
+it('validates statistics units, nullable metrics, signed P/E and metadata without floating conversions',async()=>{
+  const statistics={open:'123.5',dayHigh:'125',dayLow:'120',previousClose:'122',volume:'0',averageVolume:'9007199254740993',marketCap:'123456789',trailingPE:'-5.25',fiftyTwoWeekHigh:'160',fiftyTwoWeekLow:null};
+  const body={symbol:'VOD.L',rawCurrency:'GBp',statistics,sector:'Telecom',industry:null,description:null};
+  expect(await client(body).statistics(instrument)).toMatchObject({rawCurrency:'GBp',statistics,sector:'Telecom'});
+  for(const invalid of [{...body,rawCurrency:'GBP'},{...body,symbol:'OTHER'},{...body,statistics:{...statistics,volume:'1.5'}},{...body,statistics:{...statistics,open:'NaN'}}]){
+    await expect(client(invalid).statistics(instrument)).rejects.toThrow();
+  }
+});
+
+it('absorbs a bounded startup burst without dropping instrument discovery while limiting upstream concurrency',async()=>{
+  let release!:()=>void;
+  const gate=new Promise<void>(r=>{release=r});
+  let active=0,peak=0;
+  const provider=new YfinanceProvider('http://market-data:8000',async()=>{
+    active++;peak=Math.max(peak,active);await gate;active--;
+    return new Response(JSON.stringify({items:[source]}));
+  });
+  const calls=[provider.search('one'),provider.search('two'),provider.search('three')];
+  // Attach rejection handlers before yielding; failing admission must not go unhandled.
+  const done=Promise.allSettled(calls);
+  release();const results=await done;
+  expect(peak).toBeLessThanOrEqual(2);
+  expect(results.map(r=>r.status)).toEqual(['fulfilled','fulfilled','fulfilled']);
+});
+
+it('expires waiting calls without leaking admission capacity',async()=>{
+  vi.useFakeTimers();
+  let release!:()=>void;
+  const gate=new Promise<void>(r=>{release=r});
+  const provider=new YfinanceProvider('http://market-data:8000',async()=>{await gate;return new Response(JSON.stringify({items:[source]}))});
+  const active=[provider.search('one'),provider.search('two')];
+  const queued=provider.fx('GBP');
+  const verdict=queued.then(()=> 'fulfilled',()=> 'expired');
+  try {
+    await vi.advanceTimersByTimeAsync(6501);
+    expect(await verdict).toBe('expired');
+    release();await Promise.all(active);
+    expect((await provider.search('recovered'))[0]?.symbol).toBe('VOD.L');
+  } finally {release();vi.useRealTimers();}
+});
+it('rejects excess waiting work while completing the admitted burst',async()=>{
+  let release!:()=>void;
+  const gate=new Promise<void>(r=>{release=r});
+  const provider=new YfinanceProvider('http://market-data:8000',async()=>{await gate;return new Response(JSON.stringify({items:[source]}))});
+  const admitted=Array.from({length:10},(_,i)=>provider.search(String(i)));
+  const results=Promise.allSettled(admitted);
+  await expect(provider.search('overflow')).rejects.toThrow(/pending limit/);
+  release();expect((await results).every(item=>item.status==='fulfilled')).toBe(true);
 });

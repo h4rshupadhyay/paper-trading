@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Clock, Ban, CheckCircle, Plus, Loader2, X } from 'lucide-react'
 import Header from '../components/Header'
 import ResourceError from '../components/ResourceError'
@@ -87,18 +87,20 @@ export default function PendingOrders() {
     setTimeout(() => setToast(null), 2500)
   }
 
+  const requestVersion = useRef(0)
   const fetchOrders = useCallback(async (status = activeTab) => {
+    const version = ++requestVersion.current
     setLoading(true)
     setLoadError(null)
     try {
       const { data } = await pendingOrdersAPI.list(status)
-      setOrders(data)
+      if (version === requestVersion.current) setOrders(data)
     } catch (err) {
-      setLoadError(err.response?.data?.error || 'Failed to load orders')
-    } finally { setLoading(false) }
+      if (version === requestVersion.current) setLoadError(err.response?.data?.error || 'Failed to load orders')
+    } finally { if (version === requestVersion.current) setLoading(false) }
   }, [activeTab])
 
-  useEffect(() => { fetchOrders(activeTab) }, [activeTab])
+  useEffect(() => { fetchOrders(activeTab); return () => { requestVersion.current++ } }, [activeTab])
 
   const handleCancel = async (order_id) => {
     setCancelling(order_id)

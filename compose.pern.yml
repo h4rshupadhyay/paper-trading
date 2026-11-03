@@ -1,10 +1,12 @@
 name: paper-pern
 services:
   market-data:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: deploy/pern/yfinance.Dockerfile
   db:
+    restart: unless-stopped
     image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
     environment:
       POSTGRES_USER: paper_admin
@@ -32,6 +34,7 @@ services:
         condition: service_healthy
     restart: 'no'
   api:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: deploy/pern/server.Dockerfile
@@ -56,6 +59,7 @@ services:
       retries: 10
     stop_grace_period: 15s
   worker:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: deploy/pern/server.Dockerfile
@@ -73,6 +77,7 @@ services:
       timeout: 5s
       retries: 3
   web:
+    restart: unless-stopped
     environment:
       TRUSTED_INGRESS_CIDR: ${TRUSTED_INGRESS_CIDR:-127.0.0.1/32}
     build:

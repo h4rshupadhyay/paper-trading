@@ -43,6 +43,12 @@ class ComposeEntryTest(unittest.TestCase):
         self.assertEqual(config['services']['migrate']['command'],
                          ['node', 'apps/server/dist/src/platform/migrate.js'])
 
+    def test_long_running_services_recover_after_exit(self):
+        config=json.loads(render().stdout)
+        for name in ('db','api','worker','web','market-data'):
+            self.assertEqual(config['services'][name].get('restart'),'unless-stopped',name)
+        self.assertEqual(config['services']['migrate']['restart'],'no')
+
     def test_missing_secrets_fail_closed(self):
         for entry in ((), ('-f', 'compose.pern.yml')):
             with self.subTest(entry=entry):

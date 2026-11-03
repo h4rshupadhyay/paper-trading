@@ -181,6 +181,37 @@ class MarketData:
             return dict(instrument=canonical, items=bars)
         return self.cached(('history', requested, period, interval), fetch)
 
+    def statistics(self, requested):
+        symbol(requested)
+        def fetch():
+            info = self.wait(self.submit(lambda: yf.Ticker(requested).info))
+            if not isinstance(info, dict) or info.get('symbol') != requested or info.get('currency') not in CURRENCIES | {'GBp'}:
+                raise Unavailable('Invalid statistics metadata')
+            fields = dict(open='open', dayHigh='dayHigh', dayLow='dayLow', previousClose='previousClose',
+                          volume='volume', averageVolume='averageVolume', marketCap='marketCap',
+                          trailingPE='trailingPE', fiftyTwoWeekHigh='fiftyTwoWeekHigh', fiftyTwoWeekLow='fiftyTwoWeekLow')
+            values = {}
+            for field, key in fields.items():
+                value = info.get(key)
+                try:
+                    if field == 'trailingPE':
+                        if value is None or isinstance(value, bool):
+                            raise Unavailable('Missing ratio')
+                        number = Decimal(str(value))
+                        if not number.is_finite() or abs(number) >= Decimal('1e20'):
+                            raise Unavailable('Invalid ratio')
+                        values[field] = format(number, 'f')
+                    else:
+                        values[field] = volume(value) if field in ('volume', 'averageVolume') else decimal(value, zero=True)
+                except (Unavailable, InvalidOperation, ValueError, TypeError):
+                    values[field] = None
+            if not any(value is not None for value in values.values()):
+                raise Unavailable('Statistics unavailable')
+            text = lambda key, limit: info[key] if isinstance(info.get(key), str) and len(info[key]) <= limit else None
+            return dict(symbol=requested, rawCurrency=info['currency'], statistics=values,
+                        sector=text('sector', 256), industry=text('industry', 256), description=text('longBusinessSummary', 20000))
+        return self.cached(('statistics', requested), fetch)
+
     def fx(self, currency):
         if currency not in CURRENCIES:
             raise ValueError('Invalid currency')
@@ -243,7 +274,7 @@ def route(service, target):
             raise ValueError('Invalid request target')
         params = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=8)
         allowed = {'/health': set(), '/search': {'q'}, '/quote': {'symbol'},
-                   '/history': {'symbol', 'period', 'interval'}, '/fx': {'currency'}}
+                   '/history': {'symbol', 'period', 'interval'}, '/statistics': {'symbol'}, '/fx': {'currency'}}
         if parsed.path not in allowed:
             return 404, {'error': 'Not found'}
         if set(params) - allowed[parsed.path] or any(len(v) != 1 for v in params.values()):
@@ -255,6 +286,8 @@ def route(service, target):
             return 200, {'items': service.search(values.get('q', ''))}
         if parsed.path == '/quote':
             return 200, service.quote(symbol(values.get('symbol')))
+        if parsed.path == '/statistics':
+            return 200, service.statistics(symbol(values.get('symbol')))
         if parsed.path == '/history':
             return 200, service.history(symbol(values.get('symbol')), values.get('period', '3mo'), values.get('interval', '1d'))
         return 200, service.fx(values.get('currency'))

@@ -91,3 +91,19 @@ test('mark read rejects a failed batch and leaves later notifications for retry'
     assert.deepEqual(completed,ids.slice(0,100))
   } finally {api.defaults.adapter=original;resetCsrf()}
 })
+
+test('snapshot maps supported statistics and computes movement only from a valid prior close',async()=>{
+  rememberInstrument({id:'snapshot',symbol:'SNAP',currency:'USD',name:'Snapshot',tradable:true,provider:'yfinance'})
+  const original=api.defaults.adapter
+  api.defaults.adapter=async config=>({config,status:200,statusText:'OK',headers:{},data:{quote:{price:'110',session:'UNKNOWN',fetchedAt:new Date().toISOString()},quality:'fresh',statistics:{open:'105',previousClose:'100',volume:'0',trailingPE:'-5.25',quality:'stale',sector:'Technology',fetchedAt:'2026-11-01T00:00:00Z'}}})
+  try {
+    const {data}=await stocksAPI.snapshot('SNAP')
+    assert.equal(data.open,105)
+    assert.equal(data.volume,0)
+    assert.equal(data.pe_ratio,-5.25)
+    assert.equal(data.sector,'Technology')
+    // Stale statistics must never become a current daily movement.
+    assert.equal(data.change_pct,null)
+    assert.equal(data.statisticsQuality,'stale')
+  } finally {api.defaults.adapter=original}
+})

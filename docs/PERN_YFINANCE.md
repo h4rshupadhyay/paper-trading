@@ -66,3 +66,37 @@ npm run test:db:down
 ```
 
 The probe refuses production mode, creates an isolated test database, and drops it afterward. It does not change the existing application database or provider configuration. Do not run concurrent probes to evade upstream quotas.
+
+
+## Instrument statistics snapshots
+
+Schema migration 005 adds display-only instrument statistics. The authenticated
+`GET /api/instruments/:id/snapshot` endpoint reads a stored quote and an independent
+statistics snapshot. Stored quotes return promptly and refresh in bounded background
+work when older than 15 seconds; a cold quote gets one bounded bootstrap attempt.
+Stock Detail polls every 15 seconds without resetting the selected chart period.
+The existing `/quote` endpoint and market-order refresh remain blocking.
+
+The private bridge `/statistics?symbol=...` reads one `Ticker.info` response. Supported
+optional fields are open, day high/low, previous close, volume, average volume,
+market cap, trailing P/E and 52-week high/low, plus sector, industry and description.
+Price fields in pence are normalized to pounds; market cap is already in major
+currency units and volume/P/E are not currency-converted. Missing fields stay unavailable.
+
+Successful statistics refreshes are spaced at least 30 minutes apart. Failures retry
+no sooner than 60 seconds, preserve every stored field and its successful receipt
+time, and never renew quote/FX freshness. Statistics older than 60 minutes are marked
+stale and remain visible. A successful partial response replaces the entire snapshot;
+old and new metrics are not combined. Receipt times are not provider observation times.
+Statistics never enable or disable orders. No daily movement is inferred from a
+separately fetched previous close with unknown session alignment.
+
+The Node adapter admits up to two upstream requests and eight bounded waiting calls,
+with admission consuming the existing timeout budget. Excess calls fail rather than
+creating an unbounded queue. The Python bridge retains its shared two-slot limit.
+
+Use the normal Compose rebuild/migration workflow to deploy schema 005; do not run
+new API binaries against a schema-004 database. Forward migration preserves existing
+account, execution, cash and position records. This implementation's verification uses
+only disposable databases. Yahoo data remains subject to its terms and yfinance is
+intended for personal research/education.

@@ -13,6 +13,7 @@ export type ProviderBar = { observedAt: string; open: string; high: string; low:
 export type HistoryOptions = { period?: '1d'|'5d'|'1mo'|'3mo'|'6mo'|'1y'|'5y'; interval?: '5m'|'15m'|'1d'|'1wk'|'1mo' };
 export interface MarketProvider {
   readonly name: string;
+  statistics?(instrument: Instrument): Promise<ProviderStatistics>;
   search(query: string): Promise<ProviderInstrument[]>;
   quote(instrument: Instrument): Promise<ProviderQuote>;
   fx(currency: Currency): Promise<ProviderFx>;
@@ -138,3 +139,10 @@ export class YahooProvider implements MarketProvider {
     });
   }
 }
+
+export const statisticFields = ['open','dayHigh','dayLow','previousClose','volume','averageVolume','marketCap','trailingPE','fiftyTwoWeekHigh','fiftyTwoWeekLow'] as const;
+export type StatisticField = typeof statisticFields[number];
+export type ProviderStatistics = {
+  symbol: string; rawCurrency: string; statistics: Record<StatisticField,string|null>;
+  sector: string|null; industry: string|null; description: string|null;
+};

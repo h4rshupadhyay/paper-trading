@@ -10,7 +10,7 @@ const noteFields = 'n.id,n.instrument_id AS "instrumentId",i.symbol,n.title,n.bo
 const noteFrom = 'notes n LEFT JOIN instruments i ON i.id=n.instrument_id';
 const alertFields = `a.id,a.instrument_id AS "instrumentId",i.symbol,i.currency,a.condition,a.target_price AS "targetPrice",
   a.active,a.created_at AS "createdAt",a.triggered_at AS "triggeredAt"`;
-const entryFields = `e.id,e.folder_id AS "folderId",e.instrument_id AS "instrumentId",i.symbol,i.name,i.currency,q.price,
+const entryFields = `e.id,e.folder_id AS "folderId",e.instrument_id AS "instrumentId",i.symbol,i.name,i.currency,e.created_at AS "createdAt",q.price,
   CASE WHEN q.price IS NULL OR i.paused THEN 'UNAVAILABLE'
     WHEN CASE WHEN q.provider='yfinance' THEN q.fetched_at ELSE q.observed_at END<now()-interval '60 seconds'
       OR q.observed_at>now()+interval '5 seconds' OR q.fetched_at>now()+interval '5 seconds' THEN 'STALE'

@@ -49,7 +49,7 @@ The default `compose.yml` delegates to `compose.pern.yml`; both use project `pap
 
 Open **http://localhost:3000**, create an account, and sign in. If you change the web port, update both `PERN_WEB_PORT` and `PUBLIC_ORIGIN` in the environment file.
 
-The stack starts the web app, API, background worker, private yfinance service, and PostgreSQL database. Database migrations run before the API and worker start. Account and trading data persist across restarts.
+The stack starts the web app, API, background worker, private yfinance service, and PostgreSQL database. Database migrations run before the API and worker start. Account and trading data persist across restarts. See [local operations and backup/restore](docs/PERN_OPERATIONS.md) for deployment maintenance, recovery verification and dependency updates.
 
 ### 3. Stop the app
 

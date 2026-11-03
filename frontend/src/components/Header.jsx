@@ -198,13 +198,13 @@ function IndexTicker() {
       <span className="index-price">
         {formatPrice(quote.price, { from: tickerCurrency(region.index) })}
       </span>
-      <span className={`index-change ${up ? 'pos' : 'neg'}`}>
+      {quote.change_pct != null && <span className={`index-change ${up ? 'pos' : 'neg'}`}>
         {up
           ? <TrendingUp size={11} />
           : <TrendingDown size={11} />
         }
-        {up ? '+' : ''}{(quote.change_pct ?? 0).toFixed(2)}%
-      </span>
+        {up ? '+' : ''}{quote.change_pct.toFixed(2)}%
+      </span>}
     </div>
   )
 }

@@ -5,8 +5,8 @@ import type { Pool } from 'pg';
 import { createPool } from './db.js';
 
 const migrationLock = 1480963202;
-export const latestVersion = 4;
-const files = ['001_foundation.sql', '002_market.sql', '003_tools.sql', '004_trading.sql'];
+export const latestVersion = 5;
+const files = ['001_foundation.sql', '002_market.sql', '003_tools.sql', '004_trading.sql', '005_instrument_statistics.sql'];
 
 async function migrationSql(filename: string): Promise<string> {
   try { return await readFile(new URL(`../../migrations/${filename}`, import.meta.url), 'utf8'); }

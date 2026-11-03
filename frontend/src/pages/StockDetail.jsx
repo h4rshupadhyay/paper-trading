@@ -57,16 +57,21 @@ function InstrumentDetail({ ticker }) {
   const [showFolderPicker, setShowFolderPicker] = useState(false)
   const folderPickerRef = useRef(null)
 
+  const loaded = useRef(false)
+  const requestVersion = useRef(0)
   const fetchQuote = useCallback(async () => {
-    setLoading(true)
+    const version = ++requestVersion.current
+    if (!loaded.current) setLoading(true)
     setError(null)
     try {
-      const { data } = await stocksAPI.quote(ticker)
+      const { data } = await stocksAPI.snapshot(ticker)
+      if (version !== requestVersion.current) return
+      loaded.current = true
       setQuote(data)
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to fetch stock data')
+      if (version === requestVersion.current) setError(e.response?.data?.error || 'Failed to fetch stock data')
     } finally {
-      setLoading(false)
+      if (version === requestVersion.current) setLoading(false)
     }
   }, [ticker])
 
@@ -84,6 +89,8 @@ function InstrumentDetail({ ticker }) {
   useEffect(() => {
     fetchQuote()
     checkWatchlist()
+    const timer = setInterval(fetchQuote, 15000)
+    return () => { clearInterval(timer); requestVersion.current++ }
   }, [fetchQuote, checkWatchlist])
 
   // Close folder picker on outside click
@@ -114,13 +121,7 @@ function InstrumentDetail({ ticker }) {
     setWatchlistError(null)
     setWlLoading(true)
     try {
-      await watchlistAPI.add(ticker)
-      if (folderId !== null) {
-        // Move to specific folder — need the watchlist_id
-        const { data } = await watchlistAPI.get()
-        const item = data.watchlist?.find((w) => w.ticker === ticker && w.folder_id == null)
-        if (item) await watchlistAPI.moveItem(item.watchlist_id, folderId)
-      }
+      await watchlistAPI.add(ticker, folderId)
       setInWatchlist(true)
     } catch (err) {
       setWatchlistError(err.response?.data?.error || 'Failed to watch instrument. Try again.')
@@ -149,6 +150,7 @@ function InstrumentDetail({ ticker }) {
           <ChevronLeft size={16} /> Back
         </button>
 
+        {error && quote && <ResourceError message={error} onRetry={fetchQuote} retryLabel="Retry stock data" />}
         {orderSuccess && (
           <div className="toast success">{orderSuccess}</div>
         )}
@@ -159,7 +161,7 @@ function InstrumentDetail({ ticker }) {
             <Skeleton height="1rem" width="50%" style={{ marginTop: '0.5rem' }} />
             <Skeleton height="3rem" width="20%" style={{ marginTop: '1rem' }} />
           </div>
-        ) : error ? (
+        ) : error && !quote ? (
           <div className="error-banner">{error}</div>
         ) : quote && (
           <>
@@ -171,6 +173,7 @@ function InstrumentDetail({ ticker }) {
                   <span className="stock-exchange">{quote.exchange}</span>
                 </div>
                 <p className="stock-company">{quote.company_name}</p>
+                <p className="text-muted">Quote: {quote.quality}{quote.fetchedAt ? ` · received ${new Date(quote.fetchedAt).toLocaleString()}` : ''}</p>
                 {quote.provider !== 'yfinance' && <p className="text-muted">{quote.currency} · {quote.provider === "fixture" ? "Simulated fixture data" : quote.provider} · {quote.quality} · {quote.session || "Unknown session"}{quote.observedAt ? ` · ${new Date(quote.observedAt).toLocaleString()}` : ""}</p>}
                 {quote.unavailableReason && <p className="error-banner">{quote.unavailableReason}</p>}
                 <p className="stock-sector">{[quote.sector, quote.industry].filter(Boolean).join(' · ')}</p>
@@ -250,6 +253,7 @@ function InstrumentDetail({ ticker }) {
             {/* Key stats */}
             <section className="card">
               <h2 className="card-title">Key Statistics</h2>
+              <p className="text-muted" role="status">Statistics: {quote.statisticsQuality || 'unavailable'}{quote.statisticsFetchedAt ? ` · received ${new Date(quote.statisticsFetchedAt).toLocaleString()}` : ' · awaiting provider data'}. These values do not determine trade eligibility.</p>
               <div className="stats-grid-4">
                 <StatItem label="Open"        value={fp(quote.open)} />
                 <StatItem label="Day High"    value={fp(quote.day_high)} />
