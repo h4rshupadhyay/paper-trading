@@ -1,6 +1,6 @@
 # PERN delivery and model delegation
 
-Completion update,3 November2026: M2–M7 implementation is on `feat/pern-complete`, with independent review,214 backend tests,8 frontend tests, ten-route browser acceptance and Docker lifecycle/restart checks. Live execution stays disabled pending provider acceptance. See the [completion record](2026-11-02-pern-completion-results.md). The foundation-era ledger below is historical.
+Completion update,3 November2026: M2–M7 implementation is locally merged into `main`, with independent review,214 backend tests,8 frontend tests, ten-route browser acceptance and Docker lifecycle/restart checks. Post-merge checks passed; the merged feature branch/worktree were removed. Live execution stays disabled pending provider acceptance. See the [completion record](2026-11-02-pern-completion-results.md). The foundation-era ledger below is historical.
 
 Status: foundation implemented and task-reviewed, 2 November 2026. The user authorized execution with “let’s start”, preserving LUNA for bounded work and SOL for reasoning/integration/review. Primary checks passed 112 tests, typecheck and build; final branch review is pending. Later milestones remain planned.
 

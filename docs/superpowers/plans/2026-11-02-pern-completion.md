@@ -1,6 +1,6 @@
 # PERN Completion Implementation Plan
 
-Status: implemented, independently reviewed and verified on3 November2026. All Important findings are fixed. Live execution remains gated by provider acceptance; integration choice is pending. See [results, limits and deferred minors](2026-11-02-pern-completion-results.md).
+Status: implemented, independently reviewed, locally merged into `main` and verified on3 November2026. All Important findings are fixed. Live execution remains gated by provider acceptance. See [results, limits and deferred minors](2026-11-02-pern-completion-results.md).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 

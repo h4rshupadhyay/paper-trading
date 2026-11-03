@@ -1,6 +1,6 @@
 # PERN completion results
 
-Date: 3 November 2026. Branch: `feat/pern-complete`, based on `e2b5825` (`main`). Integration remains the user's choice.
+Date: 3 November 2026. Implementation branch: `feat/pern-complete`, based on `e2b5825`. Locally integrated into `main` at `e823114` following the user's “merge” instruction.
 
 ## Delivered
 
@@ -60,4 +60,12 @@ Database checks use only the dedicated disposable test instance and separate PER
 
 ## Handoff
 
-All Important review findings are fixed and verified. Retain the committed branch/worktree for integration choice. Stop the isolated test projects after verification while preserving the PERN acceptance volume. No merge or push is authorized by this handoff.
+All Important review findings are fixed and verified. The original handoff retained the branch/worktree for the user's integration choice; the local integration below supersedes that state. The PERN acceptance volume remains preserved.
+
+## Local integration
+
+On3 November2026, the user selected local integration with “merge”. After fetching `origin`, local `main` had no incoming remote commits. `git merge --ff-only feat/pern-complete` advanced it from `e2b5825` to `e823114`.
+
+Fresh locked dependencies were installed in the main checkout using Node24.22.2/npm11.19.1. The combined post-merge verification exited zero: typecheck,20 unit tests,194 integration tests,8 frontend tests, backend/web builds and ten-route browser acceptance. The existing Vite chunk-size advisory remains.
+
+The merged feature worktree and branch were removed after verification. Ignored acceptance evidence and private test configuration were preserved in the main checkout's ignored `.superpowers/sdd/2026-11-02-pern-completion/` directory. The disposable PostgreSQL test project was stopped. No changes were pushed; existing databases and the persistent PERN acceptance volume were not removed.
