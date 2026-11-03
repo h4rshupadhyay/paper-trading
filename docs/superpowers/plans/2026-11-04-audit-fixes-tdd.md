@@ -26,38 +26,52 @@ Each task records the failing assertion, passing command, and commit below. Befo
 
 ### Task 1 — obsolete UI responses
 
-RED: the production browser reported AAPL instead of RELIANCE.NS after releasing a held old quote; Existing note instead of New draft after a held read; AAPL instead of newer local Reliance search results. Each regression was run before its minimal implementation. GREEN: `npm run test:browser:audit` passes all three cases; `npm run typecheck` and16 frontend tests pass. Instrument-keyed mounting also resets route-specific order/chart state. Note request generations invalidate reads on New/Close/unmount; search effect cleanup ignores obsolete success/error/finally results.
+RED: the production browser reported AAPL instead of RELIANCE.NS after releasing a held old quote; Existing note instead of New draft after a held read; AAPL instead of newer local Reliance search results. Each regression was run before its minimal implementation. GREEN: `npm run test:browser:audit` passes all three cases; `npm run typecheck` and 16 frontend tests pass. Instrument-keyed mounting also resets route-specific order/chart state. Note request generations invalidate reads on New/Close/unmount; search effect cleanup ignores obsolete success/error/finally results.
 
 Ruling: the chart hides its period controls while loading, so selecting a second period during a held request is not an available user action. An attempted test demonstrated a test-design problem rather than an additional product bug and was discarded. Cross-instrument chart state is reset by the keyed instrument mount; no speculative extra chart state machinery was added.
 
 ### Task 2 — accepted order versus account refresh
 
-RED: an actual filled order followed by a503 account refresh left the order modal open (`expected count0, received1`). GREEN: all4 audit browser cases and16 frontend tests pass; typecheck passes. Submission acknowledges/ closes independently of account refresh; the account context exposes a separate retryable warning, and the regression verifies exactly one FILLED order through HTTP and successful warning recovery.
+RED: an actual filled order followed by a503 account refresh left the order modal open (`expected count0, received1`). GREEN: all 4 audit browser cases and 16 frontend tests pass; typecheck passes. Submission acknowledges/ closes independently of account refresh; the account context exposes a separate retryable warning, and the regression verifies exactly one FILLED order through HTTP and successful warning recovery.
 
 ### Task 3 — candle direction and projection
 
-RED: a known rising100→110 candle rendered red. GREEN: the browser now verifies rising/falling colors, body100–110 and wick90–120 coordinates against the existing independent line renderer's projection; all5 audit cases pass and typecheck/frontend tests pass. Recharts range bars supply scaled low/high geometry, eliminating the per-bar hard-coded210px span; raw prices determine direction. Axis label text positions are intentionally adjusted/rounded by Recharts, so the regression uses actual line geometry rather than treating label text coordinates as the exact scale.
+RED: a known rising100→110 candle rendered red. GREEN: the browser now verifies rising/falling colors, body100–110 and wick90–120 coordinates against the existing independent line renderer's projection; all 5 audit cases pass and typecheck/frontend tests pass. Recharts range bars supply scaled low/high geometry, eliminating the per-bar hard-coded210px span; raw prices determine direction. Axis label text positions are intentionally adjusted/rounded by Recharts, so the regression uses actual line geometry rather than treating label text coordinates as the exact scale.
 
 ### Task 4 — folder UUID selection
 
-RED: selecting a named folder through the Add form returned Invalid request and no entry because the UUID was converted to a number. GREEN: the browser adds the instrument and confirms its exact folder UUID through authenticated HTTP; typecheck and16 frontend tests pass. Folder values remain strings, with an empty selection mapped to null.
+RED: selecting a named folder through the Add form returned Invalid request and no entry because the UUID was converted to a number. GREEN: the browser adds the instrument and confirms its exact folder UUID through authenticated HTTP; typecheck and 16 frontend tests pass. Folder values remain strings, with an empty selection mapped to null.
 
 ### Task 5 — visible failures and retained input
 
-RED, in successive browser slices: missing error for failed note save/list/open/delete, order list, alert list/delete, notification list/read, watchlist removal, bell load/read, and stock watchlist load/add/remove; failed open hid an unsaved note; late create made the next Save overwrite the earlier note; late delete closed a newer draft; a pending open replaced the current note after Save; failed folder create/rename discarded names. Each failure was observed before its implementation. GREEN: the full original production browser workflow, yfinance trading workflow and all19 audit scenarios pass; typecheck and16 frontend tests pass. A small ResourceError component supplies accessible feedback/retry, inputs and existing data remain available after failures, and editor generations cover reads and mutations. Independent review found no remaining blockers.
+RED, in successive browser slices: missing error for failed note save/list/open/delete, order list, alert list/delete, notification list/read, watchlist removal, bell load/read, and stock watchlist load/add/remove; failed open hid an unsaved note; late create made the next Save overwrite the earlier note; late delete closed a newer draft; a pending open replaced the current note after Save; failed folder create/rename discarded names. Each failure was observed before its implementation. GREEN: the full original production browser workflow, yfinance trading workflow and all 19 audit scenarios pass; typecheck and 16 frontend tests pass. A small ResourceError component supplies accessible feedback/retry, inputs and existing data remain available after failures, and editor generations cover reads and mutations. Independent review found no remaining blockers.
 
 ### Task 6 — watchlist receipt policy
 
-RED: a recently received old/UNKNOWN yfinance quote returned STALE instead of FRESH; then a future receipt incorrectly returned FRESH instead of STALE. GREEN:21 targeted tools/yfinance integration tests and the complete215-test integration suite pass. The watchlist uses receipt age for yfinance and keeps source-age/session rules for fixture/Yahoo, missing quotes UNAVAILABLE and expired/future inputs STALE. Existing uppercase DTO quality names and execution checks are preserved. Independent review found no blocker.
+RED: a recently received old/UNKNOWN yfinance quote returned STALE instead of FRESH; then a future receipt incorrectly returned FRESH instead of STALE. GREEN: 21 targeted tools/yfinance integration tests and the complete 215-test integration suite pass. The watchlist uses receipt age for yfinance and keeps source-age/session rules for fixture/Yahoo, missing quotes UNAVAILABLE and expired/future inputs STALE. Existing uppercase DTO quality names and execution checks are preserved. Independent review found no blocker.
 
 ### Task 7 — shared market requests
 
-RED: concurrent requests for one quote occupied both provider slots. GREEN: all16 offline Python tests pass, including shared same-key work, independent instruments, upstream failure/retry, bounded capacity, and independent returned copies. Per-key Futures share in-flight results; the cache lock covers bookkeeping only. Owner timeouts end the shared flight; any still-running upstream operation retains its capacity slot until completion, preserving the existing limit. Independent review found no blocker.
+RED: concurrent requests for one quote occupied both provider slots. GREEN: all 16 offline Python tests pass, including shared same-key work, independent instruments, upstream failure/retry, bounded capacity, and independent returned copies. Per-key Futures share in-flight results; the cache lock covers bookkeeping only. Owner timeouts end the shared flight; any still-running upstream operation retains its capacity slot until completion, preserving the existing limit. Independent review found no blocker.
 
 ### Task 8 — current default startup
 
-RED: default Compose selected the legacy backend and required its old env file; an intermediate project-name assertion also failed. GREEN:2 configuration tests pass using dummy secrets, proving default/explicit PERN config equivalence, the unchanged paper-pern project/volume, migration-only startup and fail-closed missing secrets. The legacy definition is archived as compose.legacy.yml, historical instructions are marked, and npm run test:deploy exposes the checks. Independent review found no blocker.
+RED: default Compose selected the legacy backend and required its old env file; an intermediate project-name assertion also failed. GREEN: 2 configuration tests pass using dummy secrets, proving default/explicit PERN config equivalence, the unchanged paper-pern project/volume, migration-only startup and fail-closed missing secrets. The legacy definition is archived as compose.legacy.yml, historical instructions are marked, and npm run test:deploy exposes the checks. Independent review found no blocker.
 
 ### Task 9 — trusted ingress client identity
 
-RED: two clients forwarded by a configured trusted edge appeared as that edge; wildcard trust also incorrectly allowed startup. GREEN: all5 deployment checks pass, including3 actual nginx runtime tests. One explicit IPv4 ingress CIDR is opt-in; loopback is the default. nginx resolves trusted forwarded clients and overwrites outbound X-Forwarded-For with one verified address; untrusted peers cannot spoof it. Startup rejects wildcard/malformed trust. The API remains private with exactly one trusted proxy hop. Setup/example/ingress docs explain the supported chain and actual source-address configuration. Tests use temporary containers/network/image, no application database or volumes. Independent review found no blocker; its stale setup paragraph finding was corrected.
+RED: two clients forwarded by a configured trusted edge appeared as that edge; wildcard trust also incorrectly allowed startup. GREEN: all 5 deployment checks pass, including 3 actual nginx runtime tests. One explicit IPv4 ingress CIDR is opt-in; loopback is the default. nginx resolves trusted forwarded clients and overwrites outbound X-Forwarded-For with one verified address; untrusted peers cannot spoof it. Startup rejects wildcard/malformed trust. The API remains private with exactly one trusted proxy hop. Setup/example/ingress docs explain the supported chain and actual source-address configuration. Tests use temporary containers/network/image, no application database or volumes. Independent review found no blocker; its stale setup paragraph finding was corrected.
+
+## Final verification
+
+- `npm run typecheck` — server/contracts pass.
+- `npm run test:foundation` — 20 unit and 215 integration tests pass against disposable PostgreSQL.
+- `npm run test:web` — 16 pass.
+- `npm run test:e2e` — original production UI workflow, yfinance trading workflow and 19 audit scenarios pass.
+- `/tmp/paper-yfinance-venv/bin/python -m unittest discover -s services/yfinance -p test_app.py -v` — 16 pass.
+- `npm run test:deploy` — 5 configuration/actual nginx checks pass using disposable resources.
+- Independent review — no remaining blockers; reported draft/ingress documentation issues were addressed and relevant regressions passed.
+
+Task commits, in order: `e060cd5`, `eeaaeb5`, `3883324`, `ba2cb03`, `fe4e6d7`, `5447b6b`, `2486ed0`, `abc8bce`, `e226804`.
+
+Local update: default Compose build/start completed successfully; web, API, worker, market-data and the existing database are healthy. Frontend HTTP 200 and /api/health/ready returned ok. The database container retained its prior uptime and paper-pern_pern_data volume. Disposable test PostgreSQL was stopped and removed. Deferred free-provider research was preserved outside these commits. Branch fix/audit-tdd remains in the IDE checkout; no remote push or merge was requested.

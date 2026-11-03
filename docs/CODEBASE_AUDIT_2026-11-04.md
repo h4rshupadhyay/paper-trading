@@ -1,5 +1,7 @@
 # Codebase audit — 4 November 2026
 
+**Implementation status:** the nine approved fixes are complete on `fix/audit-tdd`, each with a separate task commit and an observed failing regression before implementation. The findings below describe the reviewed baseline; see [implementation results](#implementation-results) for current status. The lower-priority restart-policy finding and cleanup suggestions remain follow-up work.
+
 ## Assessment
 
 The current architecture is a reasonable size for this product: React, an Express API and worker, PostgreSQL, and a private yfinance bridge. Keep that structure. The highest-value work is to fix UI failure paths, make shared rules consistent, and make the existing code easier to read and check.
@@ -66,7 +68,7 @@ Watchlist SQL classifies by source observation age and regular-session status. A
 
 ### 7. Medium: default startup still points at the legacy application
 
-**Evidence:** [docker-compose.yml:33](../docker-compose.yml#L33), [docker-compose.yml:62](../docker-compose.yml#L62), [MANUAL_SETUP.md](../MANUAL_SETUP.md), [frontend/Dockerfile:1](../frontend/Dockerfile#L1), [backend/entrypoint.sh:5](../backend/entrypoint.sh#L5).
+**Evidence:** [archived Compose:33](../compose.legacy.yml#L33), [archived Compose:62](../compose.legacy.yml#L62), [MANUAL_SETUP.md](../MANUAL_SETUP.md), [frontend/Dockerfile:1](../frontend/Dockerfile#L1), [backend/entrypoint.sh:5](../backend/entrypoint.sh#L5).
 
 The README correctly specifies `compose.pern.yml`, but plain `docker compose up` still selects Oracle/Flask with the current PERN frontend. The legacy frontend image also uses Node20 while the active toolchain requires Node24. The old backend entrypoint runs demo seeding. Old manual instructions remain easy to mistake for current setup.
 
@@ -74,7 +76,7 @@ The README correctly specifies `compose.pern.yml`, but plain `docker compose up`
 
 ### 8. Medium, before public deployment: the documented HTTPS proxy chain collapses client IPs
 
-**Evidence:** [nginx.conf:10](../deploy/pern/nginx.conf#L10), [PERN_SETUP.md:27](PERN_SETUP.md#L27), [platform/http.ts:64](../apps/server/src/platform/http.ts#L64).
+**Evidence:** [nginx template](../deploy/pern/nginx.conf.template), [PERN_SETUP.md:27](PERN_SETUP.md#L27), [platform/http.ts:64](../apps/server/src/platform/http.ts#L64).
 
 nginx overwrites forwarded client IP with its direct peer. With an additional HTTPS edge in front, the application sees the edge's address for every client. Its per-IP authentication throttle then becomes shared across those users. The current loopback-only local app is not a public-ingress deployment.
 
@@ -147,3 +149,23 @@ Keep mechanical formatting, behavior fixes, and source archiving in separate rev
 | npm audit, root and frontend lockfiles |0 reported known vulnerabilities in either graph |
 
 All database verification used the guarded disposable test instance, not existing application data. Passing these suites does not cover the newly identified races, folder dropdown, candle coordinates, or proxy chain. npm audit is not a Python dependency/image scan or a penetration test. No legacy Oracle runtime, public ingress, provider load test, disaster recovery, or exhaustive accessibility audit was performed.
+
+## Implementation results
+
+The task order follows the approved priority list; finding numbers above retain the original audit order.
+
+| Task | Result | Commit |
+| --- | --- | --- |
+| 1 | Obsolete instrument/search responses ignored; note drafts protected | `e060cd5` |
+| 2 | Accepted orders acknowledged independently of account refresh; retryable account warning | `eeaaeb5` |
+| 3 | Candle colors use raw prices; bodies/wicks use the actual chart scale | `3883324` |
+| 4 | Folder selections preserve UUID strings | `ba2cb03` |
+| 5 | Resource errors visible/retryable; drafts, folder names and existing items retained | `fe4e6d7` |
+| 6 | Watchlist quality follows yfinance receipt policy without weakening strict providers | `5447b6b` |
+| 7 | Same-key market requests share pending work while retaining capacity/time bounds | `2486ed0` |
+| 8 | Default Compose selects PERN and preserves the existing project/data volume | `abc8bce` |
+| 9 | Explicit trusted ingress preserves client identity; untrusted headers cannot spoof it | `e226804` |
+
+Verification: typecheck; 20 backend unit tests; 215 integration tests; 16 frontend tests; 16 offline Python tests; the original production-browser workflow; the yfinance-browser trading workflow; 19 audit-browser scenarios; and 5 Compose/nginx tests passed. Browser coverage includes actual HTTP mutations followed by display failures, deliberate out-of-order responses, retries, raw OHLC geometry, owned resources, and retained drafts. Independent code review found no remaining blockers. Public HTTPS still requires the actual ingress source CIDR and TLS setup described in [the ingress guide](PERN_INGRESS.md); the default remains safe for local use.
+
+The [TDD ledger](superpowers/plans/2026-11-04-audit-fixes-tdd.md) records each RED/GREEN cycle and repeatable commands. No accounting/schema redesign, synthetic price fallback, broad adapter/CSS rewrite, or extra infrastructure was introduced. The user-selected yfinance trading policy remains in force.
