@@ -1,3 +1,7 @@
+# Archived Oracle/Flask manual setup
+
+**Historical instructions only.** The current frontend requires the PERN API and cannot use the Flask backend below. Follow [current setup](README.md#getting-started) or [PERN manual setup](docs/PERN_SETUP.md). These old instructions may seed demo data; do not run them against current or existing databases. The archived Compose definition is `compose.legacy.yml` and is never the default entry.
+
 # Manual Setup Guide
 
 ## One-time setup (do this once ever)

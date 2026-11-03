@@ -17,7 +17,7 @@
 - [x] **5 — visible failures:** failed note save preserves draft and displays retryable error; extend the pattern to loads and other audited tools in vertical slices. Commit `fix: surface resource errors without discarding user input`.
 - [x] **6 — watchlist quality:** authenticated watchlist response for a recently received old/UNKNOWN yfinance quote agrees with quote availability; expired receipts remain stale. Align the query without weakening execution checks. Commit `fix: apply yfinance receipt policy to watchlist quotes`.
 - [x] **7 — duplicate misses:** concurrent public quote requests for the same key share upstream work while another key can progress; failure permits retry and limits remain bounded. Python offline RED/GREEN. Commit `fix: coalesce concurrent market-data cache misses`.
-- [ ] **8 — default startup:** invoke default Compose configuration with controlled env and assert PERN services; archive legacy entry point, preserve project/volume and explicit PERN command. Commit `fix: make PERN the default compose entry point`.
+- [x] **8 — default startup:** invoke default Compose configuration with controlled env and assert PERN services; archive legacy entry point, preserve project/volume and explicit PERN command. Commit `fix: make PERN the default compose entry point`.
 - [ ] **9 — trusted proxy:** actual nginx distinguishes forwarded clients from a configured trusted peer and ignores spoofed forwarded addresses from untrusted peers; trusted ingress remains opt-in. Commit `fix: preserve client identity through trusted ingress`.
 
 Each task records the failing assertion, passing command, and commit below. Before each commit run relevant checks and inspect its staged diff. Final verification: typecheck, backend unit/integration, frontend unit, Python, full original/yfinance/audit browser workflows, and deployment tests. Review the combined fixes, then update the local app without changing stored data. Infrastructure tests use temporary resources and never the active database.
@@ -53,3 +53,7 @@ RED: a recently received old/UNKNOWN yfinance quote returned STALE instead of FR
 ### Task 7 — shared market requests
 
 RED: concurrent requests for one quote occupied both provider slots. GREEN: all16 offline Python tests pass, including shared same-key work, independent instruments, upstream failure/retry, bounded capacity, and independent returned copies. Per-key Futures share in-flight results; the cache lock covers bookkeeping only. Owner timeouts end the shared flight; any still-running upstream operation retains its capacity slot until completion, preserving the existing limit. Independent review found no blocker.
+
+### Task 8 — current default startup
+
+RED: default Compose selected the legacy backend and required its old env file; an intermediate project-name assertion also failed. GREEN:2 configuration tests pass using dummy secrets, proving default/explicit PERN config equivalence, the unchanged paper-pern project/volume, migration-only startup and fail-closed missing secrets. The legacy definition is archived as compose.legacy.yml, historical instructions are marked, and npm run test:deploy exposes the checks. Independent review found no blocker.

@@ -1,0 +1,5 @@
+name: paper-pern
+# Default entry: current PERN stack. Required secrets fail closed.
+# The explicit compose.pern.yml entry remains supported with the same project/volume.
+include:
+  - compose.pern.yml

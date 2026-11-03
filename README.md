@@ -42,8 +42,10 @@ The example defaults to `yfinance`. Fixture mode is disabled in production. Indi
 ### 2. Start the app
 
 ```bash
-docker compose --env-file .env.pern-compose.local -f compose.pern.yml up --build --detach --wait
+docker compose --env-file .env.pern-compose.local up --build --detach --wait
 ```
+
+The default `compose.yml` delegates to `compose.pern.yml`; both use project `paper-pern` and the existing `paper-pern_pern_data` volume. Bare `docker compose up` requires the same secrets in the shell or `.env` and fails if they are absent. Startup runs migrations only; it does not seed demo data.
 
 Open **http://localhost:3000**, create an account, and sign in. If you change the web port, update both `PERN_WEB_PORT` and `PUBLIC_ORIGIN` in the environment file.
 
@@ -52,7 +54,7 @@ The stack starts the web app, API, background worker, private yfinance service, 
 ### 3. Stop the app
 
 ```bash
-docker compose --env-file .env.pern-compose.local -f compose.pern.yml down
+docker compose --env-file .env.pern-compose.local down
 ```
 
 This preserves the database volume. Adding `--volumes` deletes its stored data.
@@ -121,6 +123,8 @@ npm run test:db:down
 
 With the market-data virtual environment activated, run `npm run test:market` for the offline Python service tests.
 
+Run `npm run test:deploy` to verify the Compose entry points with dummy secrets; this does not start the app.
+
 Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
 
 ## Project structure
@@ -148,4 +152,4 @@ docs/                      Setup, operations, and design documentation
 - [Provider alternatives](docs/PERN_PROVIDER_RESEARCH.md) — official-source coverage, delays, and evidence still needed for trading.
 - [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.
 
-The earlier Flask/Oracle application remains in `backend/`, `database/`, and `docker-compose.yml` for reference. See the [legacy README](docs/LEGACY_README.md) for that version; the current app uses `compose.pern.yml`.
+The earlier Flask/Oracle application remains in `backend/`, `database/`, and `compose.legacy.yml` for reference. See the [legacy README](docs/LEGACY_README.md) for that version; the current app uses the default `compose.yml` or explicit `compose.pern.yml`. The archived stack is incompatible with the current frontend and must not be used to start this app.

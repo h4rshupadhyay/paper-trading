@@ -1,3 +1,7 @@
+# Archived application — reference only
+
+**Do not use this guide to start the current app.** The retained Oracle/Flask sources and `compose.legacy.yml` are historical. The current frontend requires the PERN API and is incompatible with this archived stack. Legacy startup may seed demo accounts. Use the [current README](../README.md) instead; preserve existing Oracle volumes. The commands below apply only to a separately restored, compatible legacy checkout, never the current frontend or a current database.
+
 # PaperTrade — Financial Investment & Portfolio Management System
 
 A production-quality paper trading platform built with **Oracle 21c XE**, **Python Flask**, and **React**. Practice stock trading with $1,000,000 in virtual cash, real-time prices via Yahoo Finance, multi-currency support, and a clean Zerodha Kite-inspired UI.
@@ -53,7 +57,7 @@ A production-quality paper trading platform built with **Oracle 21c XE**, **Pyth
 
 ```
 paper-trading/
-├── docker-compose.yml         Single command to start DB + backend + frontend
+├── compose.legacy.yml         Single command to start DB + backend + frontend
 ├── database/
 │   ├── setup.sql              Master script — runs all four files in order
 │   ├── 01_schema.sql          Tables, indexes, constraints (3NF)
@@ -195,10 +199,10 @@ NOTIFICATIONS       — In-app notifications generated when an alert triggers
 
 ```bash
 # First run — builds images and initialises the database (~2–3 min)
-docker compose up --build
+docker compose -f compose.legacy.yml up --build
 
 # Subsequent runs
-docker compose up
+docker compose -f compose.legacy.yml up
 ```
 
 | Service | URL |
@@ -213,16 +217,16 @@ The SQL init scripts (`01_schema.sql` → `04_sample_data.sql`) run automaticall
 
 ```bash
 # Stop all services
-docker compose down
+docker compose -f compose.legacy.yml down
 
 # Stop and wipe the database volume (full reset)
-docker compose down -v
+docker compose -f compose.legacy.yml down -v
 
 # View logs for one service
-docker compose logs -f backend
+docker compose -f compose.legacy.yml logs -f backend
 ```
 
-> **Note:** The backend waits for the Oracle healthcheck to pass before starting, so the first `docker compose up` will appear to hang for ~2 minutes while Oracle initialises — this is normal.
+> **Note:** The backend waits for the Oracle healthcheck to pass before starting, so the first `docker compose -f compose.legacy.yml up` will appear to hang for ~2 minutes while Oracle initialises — this is normal.
 
 ---
 

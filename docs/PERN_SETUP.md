@@ -24,6 +24,8 @@ Sessions last24 hours unless revoked, and survive process restarts. Keep CSRF_SE
 
 ## Deployment
 
+The default `compose.yml` includes `compose.pern.yml`; either entry uses project `paper-pern` and the unchanged `paper-pern_pern_data` persistent volume. Required secrets must be supplied explicitly; missing secrets stop Compose before startup. Neither entry seeds demo data. `compose.legacy.yml` archives the incompatible Oracle/Flask stack and must not be used with the current frontend.
+
 `compose.pern.yml` builds static React assets into nginx and runs compiled Node API/worker images plus a private Python yfinance service. The Python service has no database credentials or published host port. Only the web port is exposed, bound to loopback by default. Terminate public HTTPS with a trusted edge, use `NODE_ENV=production`, set PUBLIC_ORIGIN to that HTTPS origin, and retain persistent storage/backups. Production prohibits fixture selection and execution using persisted fixture instruments.
 
 The bundled nginx overwrites `X-Forwarded-For` with its direct peer and the API is configured with exactly one trusted proxy hop. Do not expose the API port directly with that setting, or pass untrusted forwarded headers through another proxy. Manual API startup trusts no proxy by default; only set `TRUST_PROXY_HOPS=1` behind the configured edge. Authentication throttling is per-process; add a shared limiter before running multiple API replicas. Keep one API/worker for initial sizing. Financial SQL locks and execution uniqueness still protect independent competing calls.
