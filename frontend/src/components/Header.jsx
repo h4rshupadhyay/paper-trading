@@ -214,7 +214,7 @@ export default function Header({ title }) {
     <header className="topbar">
       <div className="topbar-left">
         {title && <h1 className="page-title">{title}</h1>}
-        <small role="status" className="text-muted" title={fxDetails} style={{display:'block',fontSize:10}}>
+        <small role="status" className="text-muted fx-status" title={fxDetails}>
           FX estimates: {fxStatus}{sources?` · ${sources}`:''}{oldest?` · ${oldest.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`:''}
         </small>
       </div>

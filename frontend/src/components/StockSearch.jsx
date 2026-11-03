@@ -181,6 +181,7 @@ export default function StockSearch() {
           ref={inputRef}
           type="text"
           className="search-input"
+          aria-label="Search stocks"
           placeholder={ready ? 'Search stocks… (e.g. AAPL, Tesla)' : 'Loading tickers…'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}

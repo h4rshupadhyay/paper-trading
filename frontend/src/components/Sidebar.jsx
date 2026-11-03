@@ -35,11 +35,13 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Primary navigation">
         {NAV.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
+            aria-label={label}
+            title={label}
             className={({ isActive }) =>
               `sidebar-link${isActive ? ' active' : ''}`
             }
@@ -65,7 +67,7 @@ export default function Sidebar() {
             </div>
           </div>
         )}
-        <button className="sidebar-logout" onClick={handleLogout} title="Logout">
+        <button className="sidebar-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
           <LogOut size={17} />
         </button>
       </div>

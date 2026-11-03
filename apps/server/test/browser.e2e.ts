@@ -120,6 +120,53 @@ try {
  await expect.poll(unreadCount).toBe(0);await expect(page.locator('.notif-dropdown-empty')).toHaveText('No unread notifications');
  assert.ok(readBatchSizes.length>=5);assert.ok(readBatchSizes.every(size=>size>0&&size<=100));
  assert.deepEqual(errors,[],'No React crashes on any retained route');assert.deepEqual(badResponses,[],'No API contract failures from retained pages');
+ // Shared styling must keep controls reachable on small screens in both themes.
+ for(const theme of ['dark','light']) {
+  const target=theme==='light'?'Switch to light mode':'Switch to dark mode';
+  if(await page.getByTitle(target,{exact:true}).count())await page.getByTitle(target,{exact:true}).click();
+  for(const width of [1440,900,390]) {
+   await page.setViewportSize({width,height:1000});
+   for(const path of ['/dashboard','/stocks/AAPL','/pending-orders','/notes','/alerts','/analytics','/watchlist','/orders']) {
+    await page.goto(origin+path);await page.waitForLoadState('networkidle');
+    if(process.env.UI_REVIEW_DIR)await page.screenshot({path:`${process.env.UI_REVIEW_DIR}/${theme}-${width}-${path.slice(1).replaceAll('/','-')}.png`,fullPage:true});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${path}: no page overflow at ${width}px in ${theme}`);
+    for(const title of ['Notifications','Change region',theme==='light'?'Switch to dark mode':'Switch to light mode']) {
+     const bounds=await page.getByTitle(title,{exact:true}).boundingBox();
+     assert.ok(bounds&&bounds.x>=0&&bounds.x+bounds.width<=width,`${title} stays reachable at ${width}px in ${theme}`);
+    }
+    await expect(page.locator('.sidebar').getByRole('link',{name:'Dashboard',exact:true})).toHaveCount(1);
+    await expect(page.getByRole('button',{name:'Logout',exact:true})).toBeVisible();
+    if(path==='/stocks/AAPL'&&width===390) {
+     await page.getByRole('button',{name:'Trade',exact:true}).click();
+     const modal=await page.locator('.zk-card').boundingBox();
+     assert.ok(modal&&modal.x>=0&&modal.x+modal.width<=width,'Mobile order form fits the viewport');
+     await expect(page.getByLabel('Qty.',{exact:true})).toBeVisible();
+     const side=page.getByRole('checkbox',{name:'Buy order',exact:true});
+     await side.focus();await side.press('Space');await expect(page.locator('.zk-side-label')).toHaveText('Sell');
+     await side.press('Space');await expect(page.locator('.zk-side-label')).toHaveText('Buy');
+     if(process.env.UI_REVIEW_DIR)await page.screenshot({path:`${process.env.UI_REVIEW_DIR}/${theme}-390-order-form.png`,fullPage:true});
+     await page.getByRole('button',{name:'Cancel',exact:true}).click();
+    }
+   }
+  }
+  await page.setViewportSize({width:667,height:375});await page.goto(origin+'/dashboard');
+  await page.getByRole('button',{name:'Logout',exact:true}).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button',{name:'Logout',exact:true})).toBeInViewport();
+  await page.locator('.sidebar').getByRole('link',{name:'Dashboard',exact:true}).scrollIntoViewIfNeeded();
+  await expect(page.locator('.sidebar').getByRole('link',{name:'Dashboard',exact:true})).toBeInViewport();
+  // A string expression avoids the TS runner's function-name helper leaking into browser code.
+  const contrast=await page.evaluate<Array<{fg:string;bg:string;ratio:number}>>(`(() => {
+   const styles=getComputedStyle(document.documentElement);
+   const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const context=canvas.getContext('2d');
+   const luminance=(token)=>{context.fillStyle=styles.getPropertyValue(token).trim();context.fillRect(0,0,1,1);const rgb=context.getImageData(0,0,1,1).data;const channel=(index)=>{const c=rgb[index]/255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;};return 0.2126*channel(0)+0.7152*channel(1)+0.0722*channel(2);};
+   const text=['--text','--text-sub','--text-muted','--brand','--green','--red','--yellow'].flatMap(fg=>['--bg','--card-bg','--sidebar-bg','--input-bg'].map(bg=>{const a=luminance(fg),b=luminance(bg);return {fg,bg,ratio:(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)};}));
+   const white=1;
+   return text.concat(['--button-bg','--button-hover','--success-fill','--danger-fill','--warning-fill'].map(bg=>({fg:'white',bg,ratio:(white+0.05)/(luminance(bg)+0.05)})));
+  })()`);
+  for(const item of contrast)assert.ok(item.ratio>=4.5,`${theme} ${item.fg} on ${item.bg} meets text contrast: ${item.ratio}`);
+ }
+ await page.setViewportSize({width:1440,height:1000});
+ assert.deepEqual(errors,[],'No React crashes during theme and responsive checks');
  // Advance only the browser clock: sessions and provider fixtures remain valid server-side.
  const fxObservedAt=new Date(Date.now()-86400000+30000).toISOString();let fxOutage=false;
  await page.route('**/api/fx-rates',async route=>{
@@ -132,5 +179,14 @@ try {
  await expect(page.locator('.stock-price')).toHaveText('₹—');
  await expect(page.locator('[role="status"]').filter({hasText:'FX estimates'})).toContainText('unavailable');
  const logout=await page.request.post(`${origin}/api/auth/logout`,{headers});assert.equal(logout.status(),204);await page.reload();await expect(page).toHaveURL(/\/login$/);
- console.log('PASS: 10 production routes; lazy navigation; register/login/market buy; owned tools, alert dates, BUY/SELL labels, both bulk notification controls, analytics, FX expiry and logout; no browser or API errors');
+ if(process.env.UI_REVIEW_DIR)for(const theme of ['dark','light']) {
+  await page.evaluate(value=>localStorage.setItem('theme',value),theme);
+  for(const width of [1440,390])for(const path of ['/login','/register']) {
+   await page.setViewportSize({width,height:1000});await page.goto(origin+path);await page.waitForLoadState('networkidle');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Authentication page fits');
+   await page.screenshot({path:`${process.env.UI_REVIEW_DIR}/${theme}-${width}-${path.slice(1)}.png`,fullPage:true});
+   await expect(page.getByRole('heading',{level:1})).toBeVisible();
+  }
+ }
+ console.log('PASS: 10 production routes; lazy navigation; register/login/market buy; owned tools, alert dates, BUY/SELL labels, both bulk notification controls, analytics, FX expiry and logout; responsive controls at 1440/900/390px in both themes, text contrast and keyboard order switch; no browser or API errors');
 } finally {await browser?.close();for(const child of processes.reverse())await stop(child);await h.close();}

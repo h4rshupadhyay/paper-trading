@@ -36,6 +36,7 @@ export default function Login() {
           <Activity size={28} strokeWidth={2.5} className="brand-icon" />
           <span className="brand-name">PaperTrade</span>
         </div>
+        <h1 className="auth-title">Sign in</h1>
         <p className="auth-tagline">Practice trading, zero risk.</p>
 
         {/* Form */}

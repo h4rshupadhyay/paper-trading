@@ -61,6 +61,7 @@ export default function Register() {
           <Activity size={28} strokeWidth={2.5} className="brand-icon" />
           <span className="brand-name">PaperTrade</span>
         </div>
+        <h1 className="auth-title">Create an account</h1>
         <p className="auth-tagline">Start with ₹10,00,000 in virtual cash.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">

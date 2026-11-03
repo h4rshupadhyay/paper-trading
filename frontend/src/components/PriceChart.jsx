@@ -18,11 +18,11 @@ const PERIODS = [
 ]
 
 const COLORS = {
-  up:     '#00b386',
-  down:   '#e84040',
-  line:   '#387ed1',
-  volume: '#6c757d',
-  grid:   'rgba(255,255,255,0.06)',
+  up:     'var(--green)',
+  down:   'var(--red)',
+  line:   'var(--brand)',
+  volume: 'var(--text-muted)',
+  grid:   'var(--border)',
 }
 
 function CandlestickBar(props) {
@@ -138,7 +138,7 @@ export default function PriceChart({ ticker }) {
       {/* Chart */}
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
+          <CartesianGrid vertical={false} stroke={COLORS.grid} />
           <XAxis
             dataKey="label"
             tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
@@ -167,7 +167,7 @@ export default function PriceChart({ ticker }) {
           <Tooltip content={<CustomTooltip chartType={chartType} fp={fp} />} />
 
           {/* Volume bars */}
-          <Bar
+          <Bar isAnimationActive={false}
             yAxisId="volume"
             dataKey="volume"
             fill={COLORS.volume}
@@ -177,7 +177,7 @@ export default function PriceChart({ ticker }) {
 
           {/* Price */}
           {chartType === 'line' ? (
-            <Line
+            <Line isAnimationActive={false}
               yAxisId="price"
               type="monotone"
               dataKey="close"

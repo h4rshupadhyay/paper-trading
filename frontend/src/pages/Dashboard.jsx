@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import {
-  TrendingUp, TrendingDown, DollarSign,
+  TrendingUp,
   RefreshCw, ArrowUpRight,
 } from 'lucide-react'
 import Header from '../components/Header'
@@ -14,17 +14,16 @@ import { portfolioAPI } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
-function StatCard({ label, value, sub, positive, icon: Icon }) {
+function StatCard({ label, value, sub, positive }) {
   return (
     <div className="stat-card">
       <div className="stat-header">
         <span className="stat-label">{label}</span>
-        {Icon && <Icon size={16} className="stat-icon" />}
       </div>
       <div className="stat-value">{value}</div>
       {sub != null && (
         <div className={`stat-sub ${positive === true ? 'pos' : positive === false ? 'neg' : ''}`}>
-          {positive === true && '+'}{sub}
+          {sub}
         </div>
       )}
     </div>
@@ -42,18 +41,18 @@ function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
   const first = snapshots[0]?.total_value
   const last  = snapshots[snapshots.length - 1]?.total_value
   const up    = last >= first
-  const color = up ? '#00b386' : '#e84040'
+  const color = up ? 'var(--green)' : 'var(--red)'
 
   return (
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={snapshots} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
+            <stop offset="5%"  stopColor={color} stopOpacity={0.12} />
             <stop offset="95%" stopColor={color} stopOpacity={0}   />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <CartesianGrid vertical={false} stroke="var(--border)" />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => new Date(v).toLocaleDateString([], { month: 'short', day: 'numeric' })}
@@ -71,7 +70,7 @@ function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
           labelFormatter={(l) => new Date(l).toLocaleDateString()}
           contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6 }}
         />
-        <Area type="monotone" dataKey="total_value" stroke={color}
+        <Area isAnimationActive={false} type="monotone" dataKey="total_value" stroke={color}
           strokeWidth={2} fill="url(#areaGrad)" dot={false} />
       </AreaChart>
     </ResponsiveContainer>
@@ -125,7 +124,6 @@ export default function Dashboard() {
 
       <main className="page-content">
         {/* Summary stats */}
-        <p className="text-muted">Valuation: {portfolio?.quality || "loading"}. P/L is in INR and includes FX changes. Missing observations remain unavailable.</p>
         <section className="stats-grid">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -138,29 +136,27 @@ export default function Dashboard() {
               <StatCard
                 label="Total Portfolio Value"
                 value={fmt(portfolio.total_value)}
-                icon={DollarSign}
               />
               <StatCard
                 label="Cash Available"
                 value={fmt(portfolio.cash_balance)}
-                icon={DollarSign}
               />
               <StatCard
                 label="Holdings Value"
                 value={fmt(portfolio.holdings_value)}
                 sub={`${portfolio.total_pl_pct >= 0 ? '+' : ''}${portfolio.total_pl_pct?.toFixed(2)}%`}
                 positive={portfolio.total_pl_pct >= 0}
-                icon={portfolio.total_pl >= 0 ? TrendingUp : TrendingDown}
               />
               <StatCard
                 label="Total P/L"
                 value={fmt(portfolio.total_pl)}
                 positive={portfolio.total_pl >= 0}
-                icon={portfolio.total_pl >= 0 ? TrendingUp : TrendingDown}
               />
             </>
           )}
         </section>
+
+        <p className="text-muted valuation-note">Valuation: {portfolio?.quality || "loading"}. P/L is in INR and includes FX changes. Missing observations remain unavailable.</p>
 
         {/* Portfolio growth chart */}
         <section className="card chart-section">
@@ -195,11 +191,11 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th>Stock</th>
-                    <th>Qty</th>
-                    <th>Avg Cost</th>
-                    <th>Current</th>
-                    <th>Value</th>
-                    <th>P/L</th>
+                    <th className="numeric">Qty</th>
+                    <th className="numeric">Avg Cost</th>
+                    <th className="numeric">Current</th>
+                    <th className="numeric">Value</th>
+                    <th className="numeric">P/L</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -212,11 +208,11 @@ export default function Dashboard() {
                           <span className="company-name">{h.company_name}</span>
                         </div>
                       </td>
-                      <td>{h.quantity}</td>
-                      <td>{fmtp(h.avg_buy_price, h.ticker)}</td>
-                      <td>{fmtp(h.current_price, h.ticker)}</td>
-                      <td>{fmt(h.market_value)}</td>
-                      <td>
+                      <td className="numeric">{h.quantity}</td>
+                      <td className="numeric">{fmtp(h.avg_buy_price, h.ticker)}</td>
+                      <td className="numeric">{fmtp(h.current_price, h.ticker)}</td>
+                      <td className="numeric">{fmt(h.market_value)}</td>
+                      <td className="numeric">
                         {h.pl != null ? (
                           <span className={h.pl >= 0 ? 'pos' : 'neg'}>
                             {h.pl >= 0 ? '+' : ''}{fmt(h.pl)}
@@ -227,6 +223,7 @@ export default function Dashboard() {
                       <td>
                         <button
                           className="btn btn-sm btn-ghost"
+                          aria-label={`View ${h.ticker}`}
                           onClick={() => navigate(`/stocks/${h.ticker}`)}
                         >
                           <ArrowUpRight size={14} />

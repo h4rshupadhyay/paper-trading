@@ -34,12 +34,11 @@ function pct(n) {
 }
 
 /* ── Stat card ─────────────────────────────────────────────────── */
-function StatCard({ label, value, sub, positive, icon: Icon }) {
+function StatCard({ label, value, sub, positive }) {
   return (
     <div className="stat-card">
       <div className="stat-header">
         <span className="stat-label">{label}</span>
-        {Icon && <Icon size={16} className="stat-icon" />}
       </div>
       <div className={`stat-value ${positive === true ? 'pos' : positive === false ? 'neg' : ''}`}>
         {value}
@@ -152,7 +151,7 @@ export default function Analytics() {
   const firstSnap = snapshots[0]?.total_value
   const lastSnap  = snapshots[snapshots.length - 1]?.total_value
   const chartUp   = (lastSnap ?? 0) >= (firstSnap ?? 0)
-  const chartColor = chartUp ? '#00b386' : '#e84040'
+  const chartColor = chartUp ? 'var(--green)' : 'var(--red)'
 
   const winRate = holdings.length
     ? Math.round((winners.length / holdings.length) * 100)
@@ -174,27 +173,23 @@ export default function Analytics() {
           <StatCard
             label="Total Portfolio"
             value={formatCurrency(portfolio?.total_value)}
-            icon={DollarSign}
           />
           <StatCard
             label="Total P/L"
             value={formatCurrency(portfolio?.total_pl)}
             sub={pct(portfolio?.total_pl_pct ?? 0)}
             positive={portfolio?.total_pl >= 0}
-            icon={portfolio?.total_pl >= 0 ? TrendingUp : TrendingDown}
           />
           <StatCard
             label="Win Rate"
             value={`${winRate}%`}
             sub={`${winners.length}W · ${losers.length}L · ${flat.length} flat`}
             positive={winRate >= 50 ? true : winRate < 40 ? false : undefined}
-            icon={BarChart2}
           />
           <StatCard
             label="Holdings"
             value={holdings.length}
             sub={`${formatCurrency(portfolio?.holdings_value, { compact: true })} invested`}
-            icon={PieIcon}
           />
         </section>
 
@@ -244,7 +239,7 @@ export default function Analytics() {
                     <stop offset="95%" stopColor={chartColor} stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid vertical={false} stroke="var(--border)" />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(v) => new Date(v).toLocaleDateString([], { month: 'short', day: 'numeric' })}
@@ -258,7 +253,7 @@ export default function Analytics() {
                   tickLine={false} axisLine={false} width={55}
                 />
                 <Tooltip content={<AreaTooltip formatCurrency={formatCurrency} />} />
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone" dataKey="total_value"
                   stroke={chartColor} strokeWidth={2}
                   fill="url(#grad)" dot={false}
@@ -284,7 +279,7 @@ export default function Analytics() {
                 <>
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
-                      <Pie
+                      <Pie isAnimationActive={false}
                         data={sectorData}
                         dataKey="value"
                         nameKey="name"
@@ -328,7 +323,7 @@ export default function Analytics() {
               </h2>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie
+                  <Pie isAnimationActive={false}
                     data={allocationData}
                     dataKey="value"
                     nameKey="name"
@@ -336,8 +331,8 @@ export default function Analytics() {
                     innerRadius={50} outerRadius={85}
                     paddingAngle={2}
                   >
-                    <Cell fill="#387ed1" />
-                    <Cell fill="#00b386" />
+                    <Cell fill="var(--brand)" />
+                    <Cell fill="var(--green)" />
                   </Pie>
                   <Tooltip
                     formatter={(v) => [formatCurrency(v), '']}
@@ -373,7 +368,7 @@ export default function Analytics() {
                 layout="vertical"
                 margin={{ top: 0, right: 40, left: 10, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                <CartesianGrid stroke="var(--border)" horizontal={false} />
                 <XAxis
                   type="number"
                   tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v}%`}
@@ -392,9 +387,9 @@ export default function Analytics() {
                   ]}
                   contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6 }}
                 />
-                <Bar dataKey="pl_pct" radius={[0, 3, 3, 0]}>
+                <Bar isAnimationActive={false} dataKey="pl_pct" radius={[0, 3, 3, 0]}>
                   {plBarData.map((d, i) => (
-                    <Cell key={i} fill={d.pl_pct >= 0 ? '#00b386' : '#e84040'} />
+                    <Cell key={i} fill={d.pl_pct >= 0 ? 'var(--green)' : 'var(--red)'} />
                   ))}
                 </Bar>
               </BarChart>

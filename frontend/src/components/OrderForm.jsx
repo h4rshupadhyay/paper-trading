@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useId } from 'react'
 import { tradingAPI, pendingOrdersAPI } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
@@ -25,6 +25,7 @@ const ORDER_TYPES = [
 ]
 
 export default function OrderForm({ ticker, price, initialSide = 'buy', onClose, onSuccess }) {
+  const formId = useId()
   const { refreshUser }          = useAuth()
   const { formatPrice }          = useRegion()
   const priceCurr                = tickerCurrency(ticker)
@@ -111,7 +112,7 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
             <span className="zk-header-price">{fp(price)}</span>
           </div>
           <label className="zk-toggle-wrap" title="Switch Buy / Sell">
-            <input type="checkbox" checked={isBuy} onChange={toggleSide} />
+            <input type="checkbox" aria-label="Buy order" checked={isBuy} onChange={toggleSide} />
             <span className="zk-toggle-track">
               <span className="zk-toggle-thumb" />
             </span>
@@ -151,8 +152,9 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
         {/* ── Input grid ── */}
         <div className="zk-inputs">
           <div className="zk-field">
-            <label>Qty.</label>
+            <label htmlFor={`${formId}-quantity`}>Qty.</label>
             <input
+              id={`${formId}-quantity`}
               type="number"
               min="0.0001"
               step="0.0001"
@@ -163,8 +165,9 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
             />
           </div>
           <div className="zk-field">
-            <label>Price</label>
+            <label htmlFor={`${formId}-price`}>Price</label>
             <input
+              id={`${formId}-price`}
               type="number"
               min="0"
               step="any"
@@ -175,8 +178,9 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
             />
           </div>
           <div className="zk-field">
-            <label>Trigger price</label>
+            <label htmlFor={`${formId}-trigger`}>Trigger price</label>
             <input
+              id={`${formId}-trigger`}
               type="number"
               min="0"
               step="any"
@@ -193,8 +197,9 @@ export default function OrderForm({ ticker, price, initialSide = 'buy', onClose,
         {showMore && (
           <div className="zk-more-body">
             <div className="zk-field zk-field-wide">
-              <label>Expires At <span className="zk-optional">(optional)</span></label>
+              <label htmlFor={`${formId}-expiry`}>Expires At <span className="zk-optional">(optional)</span></label>
               <input
+                id={`${formId}-expiry`}
                 type="datetime-local"
                 value={expiresAt}
                 onChange={(e) => setExpiry(e.target.value)}
