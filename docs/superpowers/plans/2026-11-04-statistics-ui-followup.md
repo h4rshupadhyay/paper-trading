@@ -7,7 +7,7 @@ User direction: statistics should fill on a stock's first visit; remove diagnost
 - The quote snapshot remains prompt. A separate authenticated statistics read joins the existing bounded background work, allowing the first view to fill immediately when it finishes instead of waiting for the next 15-second poll.
 - Stock Detail merges statistics independently, guards obsolete responses and resets loading on each accepted snapshot.
 - Remove routine quote/statistics/provider/FX/valuation diagnostics. Put update times in tooltips; show brief loading, unavailable/retry, stale price and review notices only when relevant.
-- Move order policy details under More options. Preserve simulated-data identification and genuine error/recovery controls.
+- Move order policy details under More options. Preserve genuine error/recovery controls. The user subsequently requested removing the simulated-fixture label as well; it is removed from Stock Detail.
 
 ## Verification
 

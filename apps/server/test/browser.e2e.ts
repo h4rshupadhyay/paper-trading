@@ -52,7 +52,7 @@ try {
  for(const path of ['/dashboard','/stocks/RELIANCE.NS','/orders','/watchlist','/pending-orders','/alerts','/notes','/analytics']) {
   await page.goto(origin+path);await expect(page.locator('main')).toBeVisible();await expect(page.locator('.splash')).toHaveCount(0);await page.waitForLoadState('networkidle');
  }
- await page.goto(`${origin}/stocks/RELIANCE.NS`);await expect(page.getByText('Simulated fixture data',{exact:false})).toBeVisible();
+ await page.goto(`${origin}/stocks/RELIANCE.NS`);await expect(page.locator('.stock-ticker')).toHaveText('RELIANCE.NS');
  await page.getByRole('button',{name:/^Trade$/}).first().click();
  await page.locator('.zk-inputs input').first().fill('2.0000');await page.locator('.zk-btn-submit').click();await expect(page.locator('.zk-card')).toHaveCount(0);
  const movements=await h.appPool.query('SELECT amount::text FROM cash_movements ORDER BY account_sequence');assert.deepEqual(movements.rows,[{amount:'1000000.00'},{amount:'-300.00'}]);

@@ -198,7 +198,7 @@ try {
     await page.goto(origin+'/stocks/AAPL');
     await expect(page.locator('.stat-item').filter({hasText:'P/E Ratio'}).locator('.stat-item-value')).toHaveText('-5.25',{timeout:4000});
     assert.equal(snapshotCalls,1,'statistics should finish without waiting for the next quote poll');
-    await expect(page.locator('main')).not.toContainText(/Quote:|Statistics:|trade eligibility|received /);
+    await expect(page.locator('main')).not.toContainText(/Quote:|Statistics:|Simulated fixture|trade eligibility|received /);
     await expect(page.locator('.topbar')).not.toContainText(/FX estimates|yfinance|fresh/);
     if(process.env.UI_REVIEW_DIR){
       await mkdir(process.env.UI_REVIEW_DIR,{recursive:true});

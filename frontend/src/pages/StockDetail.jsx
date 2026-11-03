@@ -186,7 +186,6 @@ function InstrumentDetail({ ticker }) {
                   <span className="stock-exchange">{quote.exchange}</span>
                 </div>
                 <p className="stock-company">{quote.company_name}</p>
-                {quote.provider === 'fixture' && <p className="text-muted">Simulated fixture data</p>}
                 {quote.unavailableReason && <p className="text-muted">{quote.unavailableReason==='VIEW_ONLY_INDEX' ? 'View-only index' : quote.unavailableReason==='CORPORATE_ACTION_REVIEW' ? 'Trading paused' : 'Trading unavailable'}</p>}
                 <p className="stock-sector">{[quote.sector, quote.industry].filter(Boolean).join(' · ')}</p>
               </div>
