@@ -139,6 +139,7 @@ docs/                      Setup, operations, and design documentation
 
 - [Setup and operations](docs/PERN_SETUP.md) — local configuration, deployment, health checks, and backups.
 - [Market-data support](docs/PERN_PROVIDER_VALIDATION.md) — provider coverage and requirements for enabling trading with real data.
+- [Provider alternatives](docs/PERN_PROVIDER_RESEARCH.md) — official-source coverage, delays, and evidence still needed for trading.
 - [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.
 
 The earlier Flask/Oracle application remains in `backend/`, `database/`, and `docker-compose.yml` for reference. See the [legacy README](docs/LEGACY_README.md) for that version; the current app uses `compose.pern.yml`.

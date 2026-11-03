@@ -1,6 +1,38 @@
 # PERN market-provider validation
 
-Validation date: 2 November 2026. Live trading acceptance: **unavailable in all six regions**. The Yahoo adapter supports discovery, display quotes, raw OHLC history and INR-directed FX, but reachability is not execution acceptance. Every discovered Yahoo instrument has `tradable=false` and an explicit reason. The adapter emits `session=UNKNOWN`; it never infers a confirmed regular session from a calendar window or substitutes a previous close.
+Latest recheck: **3 November 2026**, with the original 2 November observations retained below. Live trading acceptance: **unavailable in all six regions**. The Yahoo adapter supports discovery, display quotes, raw OHLC history and INR-directed FX, but reachability is not execution acceptance. Every discovered Yahoo instrument has `tradable=false` and an explicit reason. The adapter emits `session=UNKNOWN`; it never infers a confirmed regular session from a calendar window or substitutes a previous close.
+
+## Repeatable recheck: 3 November 2026
+
+At **14:03 UTC (19:33 IST)** the actual Yahoo adapter, normalization service, restricted runtime role and trading service ran in a newly created disposable PostgreSQL database. All 23 bounded Yahoo requests returned HTTP200. The probe persisted public observations, checked history and INR-directed FX, attempted a market order for each live instrument, then separately ran the explicitly simulated fixture provider. No existing application database or runtime configuration was changed. The probe database was dropped afterward.
+
+| Region sample | Symbol | Stored major-unit price | Quote observation UTC | Approximate age at check | Live order |
+| --- | --- | --- | --- | --- | --- |
+| US / Nasdaq | AAPL | 338.32000000 USD | 2026-11-02 21:00:01 | 61,403 seconds | Blocked |
+| India / NSE | RELIANCE.NS | 1307.90000000 INR | 2026-11-03 09:59:39 | 14,625 seconds | Blocked |
+| UK / LSE | VOD.L | 1.17650000 GBP | 2026-11-03 13:48:21 | 904 seconds | Blocked |
+| Europe / Germany only | SAP.DE | 203.50000000 EUR | 2026-11-03 13:47:57 | 928 seconds | Blocked |
+| Japan / Tokyo | 7203.T | 3051.00000000 JPY | 2026-11-02 06:30:00 | 113,605 seconds | Blocked |
+| Hong Kong | 0700.HK | 397.20000000 HKD | 2026-11-03 08:08:06 | 21,320 seconds | Blocked |
+
+Every quote was older than60 seconds, every session remained `UNKNOWN`, and every live order returned `INSTRUMENT_UNAVAILABLE`. LSE pence normalized in PostgreSQL from117.65 GBp to1.17650000 GBP. All six currency observations were within the24-hour FX limit; history returned61–67 raw daily bars per sample. These successes do not resolve session, quote freshness, entitlements or complete corporate-action coverage. In particular, empty/rolling action data cannot prove that a split or dividend was absent. Closed-market observations do not establish a feed's regular-session delay; the UK/Germany samples here were approximately15 minutes old, not a general provider delay guarantee.
+
+The separate fixture run filled one market BUY for each sample in all six currencies, and independent reconciliation reported balanced cash/positions. The report labels those rows `simulated`; they are not live evidence. See the [machine-readable probe evidence](evidence/provider-validation-2026-11-03.json) and [official-source alternatives review](PERN_PROVIDER_RESEARCH.md). A representative equity does not establish full venue coverage, and the German sample does not establish all European markets.
+
+To repeat, use the pinned Node/npm runtime, install dependencies, and start only the dedicated disposable test instance:
+
+```bash
+npm run test:db:up
+TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin \
+  npm run --silent market:validate > provider-validation.json
+# Exit 2 means the report was produced but live acceptance was not established.
+# Exit 1 means a probe invariant or execution failed; inspect stderr and any report.
+npm run test:db:down
+```
+
+The probe refuses production mode and its harness refuses connections outside the disposable instance. It changes no live eligibility flags or provider settings. Quote/FX values remain PostgreSQL decimal strings; only observation ages use numeric arithmetic. It makes at most23 Yahoo requests per run with the existing timeouts. Do not run concurrent probes to evade provider quotas. Some venues are closed whenever others are open, so acceptance needs separate dated regular-session runs and exceptional-session/action scenarios, not one successful sweep.
+
+**Next evidence required:** a provider account with all relevant exchange/API usage permissions; confirmed quote observation timestamps and units; regular-session/halts semantics; complete split/dividend coverage and correction handling; INR-directed FX; and quota/latency evidence for the actual held/order universe. The user confirmed that no provider account is currently available. Public Twelve Data/EODHD offerings reviewed do not establish a six-region <=60-second feed; IBKR is an entitlement lead requiring account-specific feasibility checks, not an accepted replacement. No region is enabled by this review.
 
 ## Providers and sources
 

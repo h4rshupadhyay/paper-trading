@@ -39,7 +39,7 @@ Database checks use only the dedicated disposable test instance and separate PER
 
 ## Originally deferred minor findings — resolved locally
 
-On 3 November 2026, the user requested fixes for all four findings. The follow-up changes are verified and remain uncommitted; see the [fix plan and verification record](2026-11-03-pern-deferred-ui.md).
+On 3 November 2026, the user requested fixes for all four findings. The follow-up changes were verified and committed as `b450766` at the user's request; see the [fix plan and verification record](2026-11-03-pern-deferred-ui.md).
 
 1. Pending-order side cells now consume `side`; production browser acceptance verifies BUY/SELL labels and styles.
 2. Mark-all-read sends sequential batches of at most100 IDs through the shared adapter. Boundary/failure tests and browser acceptance cover both the Alerts page and header dropdown with more than100 unread notifications.

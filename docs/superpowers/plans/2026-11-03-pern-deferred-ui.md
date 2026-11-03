@@ -36,4 +36,4 @@ Verified on 3 November 2026 with Node 24.22.2/npm 11.19.1:
 - The delayed-chunk test first exposed an incorrect test assumption: React Router retains the old page during a client-side transition. The final test verifies that behavior, sidebar preservation, successful navigation when the chunk arrives, and the loading fallback for a separate cold deep link.
 - Production build: 24 JavaScript chunks, main entry approximately 258.35 kB, largest chunk 380.75 kB. An artifact check confirms every JavaScript chunk is below 500 kB. The Vite chunk advisory is gone without increasing its threshold. These are build sizes, not measured download or load-time improvements.
 - Independent read-only review found no concrete issues in the scoped changes. Its exclusions were final database/browser results and chunk measurements (verified separately above), and the pre-existing README rewrite (left untouched).
-- `git diff --check` passes. Changes remain uncommitted for review.
+- `git diff --check` passes. These changes, including the existing README rewrite, were committed at the user's request as `b450766` before the separate live-provider validation work began.

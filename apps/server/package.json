@@ -10,7 +10,8 @@
     "test:integration": "vitest run --project integration",
     "db:migrate": "tsx src/platform/migrate.ts",
     "start:api": "node dist/src/api.js",
-    "start:worker": "node dist/src/worker.js"
+    "start:worker": "node dist/src/worker.js",
+    "market:validate": "tsx test/provider-validation.ts"
   },
   "dependencies": {
     "@paper/contracts": "0.0.0",

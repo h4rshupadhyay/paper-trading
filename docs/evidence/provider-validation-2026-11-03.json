@@ -1,0 +1,421 @@
+{
+  "checkedAt": "2026-11-03T14:03:25.982Z",
+  "provider": "yahoo",
+  "decision": "NOT_ACCEPTED",
+  "scope": "Six representative equities only; Germany does not establish all European venue coverage.",
+  "live": [
+    {
+      "region": "US / Nasdaq",
+      "symbol": "AAPL",
+      "currency": "USD",
+      "mode": "live",
+      "tradable": false,
+      "price": "338.32000000",
+      "fxRate": "94.780000000000",
+      "historyBars": 65,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:23.952Z",
+      "quoteObservedAt": "2026-11-02T21:00:01.000Z",
+      "quoteAgeSeconds": 61403,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T12:47:11.000Z",
+      "rawPrice": "338.32",
+      "rawCurrency": "USD",
+      "exchange": "NMS",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "India / NSE",
+      "symbol": "RELIANCE.NS",
+      "currency": "INR",
+      "mode": "live",
+      "tradable": false,
+      "price": "1307.90000000",
+      "fxRate": "1.000000000000",
+      "historyBars": 64,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:24.209Z",
+      "quoteObservedAt": "2026-11-03T09:59:39.000Z",
+      "quoteAgeSeconds": 14625,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T14:03:24.208Z",
+      "rawPrice": "1307.9",
+      "rawCurrency": "INR",
+      "exchange": "NSI",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "UK / LSE",
+      "symbol": "VOD.L",
+      "currency": "GBP",
+      "mode": "live",
+      "tradable": false,
+      "price": "1.17650000",
+      "fxRate": "127.131600000000",
+      "historyBars": 66,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:24.577Z",
+      "quoteObservedAt": "2026-11-03T13:48:21.000Z",
+      "quoteAgeSeconds": 904,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T13:14:27.000Z",
+      "rawPrice": "117.65",
+      "rawCurrency": "GBp",
+      "exchange": "LSE",
+      "multiplier": "0.01000000"
+    },
+    {
+      "region": "Europe / Germany sample",
+      "symbol": "SAP.DE",
+      "currency": "EUR",
+      "mode": "live",
+      "tradable": false,
+      "price": "203.50000000",
+      "fxRate": "106.002000000000",
+      "historyBars": 67,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:24.943Z",
+      "quoteObservedAt": "2026-11-03T13:47:57.000Z",
+      "quoteAgeSeconds": 928,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T13:14:27.000Z",
+      "rawPrice": "203.5",
+      "rawCurrency": "EUR",
+      "exchange": "GER",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "Japan / Tokyo",
+      "symbol": "7203.T",
+      "currency": "JPY",
+      "mode": "live",
+      "tradable": false,
+      "price": "3051.00000000",
+      "fxRate": "0.598800000000",
+      "historyBars": 61,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:25.308Z",
+      "quoteObservedAt": "2026-11-02T06:30:00.000Z",
+      "quoteAgeSeconds": 113605,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T13:14:27.000Z",
+      "rawPrice": "3051.0",
+      "rawCurrency": "JPY",
+      "exchange": "JPX",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "Hong Kong",
+      "symbol": "0700.HK",
+      "currency": "HKD",
+      "mode": "live",
+      "tradable": false,
+      "price": "397.20000000",
+      "fxRate": "12.080400000000",
+      "historyBars": 65,
+      "orderResult": "INSTRUMENT_UNAVAILABLE",
+      "blockers": [
+        "LIVE_PROVIDER_NOT_ACCEPTED",
+        "ENTITLEMENTS_UNVERIFIED",
+        "CORPORATE_ACTION_COVERAGE_UNVERIFIED",
+        "QUOTE_NOT_FRESH",
+        "REGULAR_SESSION_UNCONFIRMED"
+      ],
+      "checkedAt": "2026-11-03T14:03:25.746Z",
+      "quoteObservedAt": "2026-11-03T08:08:06.000Z",
+      "quoteAgeSeconds": 21320,
+      "session": "UNKNOWN",
+      "fxObservedAt": "2026-11-03T13:14:27.000Z",
+      "rawPrice": "397.2",
+      "rawCurrency": "HKD",
+      "exchange": "HKG",
+      "multiplier": "1.00000000"
+    }
+  ],
+  "fixtures": [
+    {
+      "region": "US / Nasdaq",
+      "symbol": "AAPL",
+      "currency": "USD",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "83.000000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.918Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.915Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.916Z",
+      "rawPrice": "150",
+      "rawCurrency": "USD",
+      "exchange": "NMS",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "India / NSE",
+      "symbol": "RELIANCE.NS",
+      "currency": "INR",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "1.000000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.931Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.930Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.930Z",
+      "rawPrice": "150",
+      "rawCurrency": "INR",
+      "exchange": "NSI",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "UK / LSE",
+      "symbol": "VOD.L",
+      "currency": "GBP",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "105.000000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.943Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.941Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.942Z",
+      "rawPrice": "15000",
+      "rawCurrency": "GBp",
+      "exchange": "LSE",
+      "multiplier": "0.01000000"
+    },
+    {
+      "region": "Europe / Germany sample",
+      "symbol": "SAP.DE",
+      "currency": "EUR",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "90.000000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.952Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.951Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.951Z",
+      "rawPrice": "150",
+      "rawCurrency": "EUR",
+      "exchange": "GER",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "Japan / Tokyo",
+      "symbol": "7203.T",
+      "currency": "JPY",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "0.550000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.962Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.960Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.961Z",
+      "rawPrice": "150",
+      "rawCurrency": "JPY",
+      "exchange": "JPX",
+      "multiplier": "1.00000000"
+    },
+    {
+      "region": "Hong Kong",
+      "symbol": "0700.HK",
+      "currency": "HKD",
+      "mode": "simulated",
+      "tradable": true,
+      "price": "150.00000000",
+      "fxRate": "10.600000000000",
+      "historyBars": 90,
+      "orderResult": "FILLED",
+      "blockers": [],
+      "checkedAt": "2026-11-03T14:03:25.973Z",
+      "quoteObservedAt": "2026-11-03T14:03:25.971Z",
+      "quoteAgeSeconds": 0,
+      "session": "REGULAR",
+      "fxObservedAt": "2026-11-03T14:03:25.972Z",
+      "rawPrice": "150",
+      "rawCurrency": "HKD",
+      "exchange": "HKG",
+      "multiplier": "1.00000000"
+    }
+  ],
+  "requests": [
+    {
+      "symbol": "AAPL",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "RELIANCE.NS",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "VOD.L",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "SAP.DE",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "7203.T",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "0700.HK",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "AAPL",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "USDINR=X",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "AAPL",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "RELIANCE.NS",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "RELIANCE.NS",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "VOD.L",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "GBPINR=X",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "VOD.L",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "SAP.DE",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "EURINR=X",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "SAP.DE",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "7203.T",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "JPYINR=X",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "7203.T",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "0700.HK",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "HKDINR=X",
+      "status": 200,
+      "error": null
+    },
+    {
+      "symbol": "0700.HK",
+      "status": 200,
+      "error": null
+    }
+  ],
+  "remainingEvidence": [
+    "Exchange entitlements and permitted app usage",
+    "Timestamped regular-session and halt evidence",
+    "Complete corporate-action coverage and corrections",
+    "Regular-session probes across all six regions and held/order symbols"
+  ]
+}
