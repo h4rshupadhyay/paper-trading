@@ -12,7 +12,7 @@
 
 - [x] **1 — stale UI responses:** browser regression for late stock response versus current route; then late note read versus new draft; then chart-period and search responses. Implement one guard/reset at a time. Verify the affected browser cases and frontend checks. Commit `fix: ignore obsolete UI responses and preserve drafts`.
 - [x] **2 — accepted-order feedback:** commit a real order while rejecting the subsequent account refresh; assert success and exactly one order through the public HTTP API. Separate refresh failure from submission. Commit `fix: preserve successful order outcome during refresh failures`.
-- [ ] **3 — candle accuracy:** known rising/falling OHLC rendered in Candle mode; assert direction and positions against the plotted price axis. Replace the incorrect per-bar/hard-coded scale. Commit `fix: render candles against the actual price scale`.
+- [x] **3 — candle accuracy:** known rising/falling OHLC rendered in Candle mode; assert direction and positions against the plotted price axis. Replace the incorrect per-bar/hard-coded scale. Commit `fix: render candles against the actual price scale`.
 - [ ] **4 — folder UUID:** select a named folder through the Add form; assert the resulting entry's folder through the API. Preserve UUID strings. Commit `fix: preserve watchlist folder UUID selections`.
 - [ ] **5 — visible failures:** failed note save preserves draft and displays retryable error; extend the pattern to loads and other audited tools in vertical slices. Commit `fix: surface resource errors without discarding user input`.
 - [ ] **6 — watchlist quality:** authenticated watchlist response for a recently received old/UNKNOWN yfinance quote agrees with quote availability; expired receipts remain stale. Align the query without weakening execution checks. Commit `fix: apply yfinance receipt policy to watchlist quotes`.
@@ -33,3 +33,7 @@ Ruling: the chart hides its period controls while loading, so selecting a second
 ### Task 2 — accepted order versus account refresh
 
 RED: an actual filled order followed by a503 account refresh left the order modal open (`expected count0, received1`). GREEN: all4 audit browser cases and16 frontend tests pass; typecheck passes. Submission acknowledges/ closes independently of account refresh; the account context exposes a separate retryable warning, and the regression verifies exactly one FILLED order through HTTP and successful warning recovery.
+
+### Task 3 — candle direction and projection
+
+RED: a known rising100→110 candle rendered red. GREEN: the browser now verifies rising/falling colors, body100–110 and wick90–120 coordinates against the existing independent line renderer's projection; all5 audit cases pass and typecheck/frontend tests pass. Recharts range bars supply scaled low/high geometry, eliminating the per-bar hard-coded210px span; raw prices determine direction. Axis label text positions are intentionally adjusted/rounded by Recharts, so the regression uses actual line geometry rather than treating label text coordinates as the exact scale.

@@ -26,20 +26,22 @@ const COLORS = {
 }
 
 function CandlestickBar(props) {
-  const { x, y, width, height, low, high, open, close } = props
+  const { x, y, width, height, payload: { low, high, open, close } } = props
   const isUp    = close >= open
   const color   = isUp ? COLORS.up : COLORS.down
   const barX    = x + width * 0.1
   const barW    = width * 0.8
+  // Recharts scales the low/high range; interpolate the body within that range.
+  const priceY = price => high === low ? y : y + (high - price) / (high - low) * height
 
   return (
     <g>
       {/* Wick */}
-      <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height}
+      <line x1={x + width / 2} y1={priceY(high)} x2={x + width / 2} y2={priceY(low)}
         stroke={color} strokeWidth={1} />
       {/* Body */}
-      <rect x={barX} y={Math.min(open, close)} width={barW}
-        height={Math.max(Math.abs(close - open), 1)}
+      <rect x={barX} y={Math.min(priceY(open), priceY(close))} width={barW}
+        height={Math.max(Math.abs(priceY(close) - priceY(open)), 1)}
         fill={color} stroke={color} />
     </g>
   )
@@ -190,23 +192,8 @@ export default function PriceChart({ ticker }) {
             /* Candlestick via custom shape */
             <Bar
               yAxisId="price"
-              dataKey="close"
-              shape={(props) => {
-                const { x, y, width, height, payload } = props
-                const scale = (v) =>
-                  y + height - ((v - minPrice) / (maxPrice - minPrice)) * (300 * 0.7)
-                return (
-                  <CandlestickBar
-                    x={x} y={scale(payload.high)}
-                    width={width}
-                    height={Math.abs(scale(payload.low) - scale(payload.high))}
-                    open={scale(payload.open)}
-                    close={scale(payload.close)}
-                    low={scale(payload.low)}
-                    high={scale(payload.high)}
-                  />
-                )
-              }}
+              dataKey={bar => [bar.low, bar.high]}
+              shape={props => <CandlestickBar {...props} />}
               isAnimationActive={false}
             />
           )}

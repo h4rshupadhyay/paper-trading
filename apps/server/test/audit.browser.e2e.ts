@@ -181,6 +181,39 @@ try {
     await page.getByRole('button', { name: 'Refresh account', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
+  await scenario('candles show price direction and align with the plotted price axis', async ({ page, instrument }) => {
+    const apple = await instrument('AAPL');
+    await page.route(`**/api/instruments/${apple.id}/history?*`, async route => {
+      const response = await route.fetch(), data = await response.json();
+      data.items = [
+        { observedAt: '2026-10-01T12:00:00Z', open: '100', close: '110', low: '90', high: '120', volume: '1000' },
+        { observedAt: '2026-10-02T12:00:00Z', open: '110', close: '100', low: '90', high: '120', volume: '1000' },
+      ];
+      await route.fulfill({ response, json: data });
+    });
+    await page.goto(origin + '/stocks/AAPL');
+    await page.getByTitle('Change region', { exact: true }).click();
+    await page.locator('.region-option').filter({ hasText: 'United States' }).click();
+    await expect(page.locator('.recharts-line-curve')).toHaveCount(1);
+    // The existing line renderer provides an independent projection of the two known closes.
+    const reference = await page.locator('.recharts-line-curve').evaluate(node => {
+      const path = node as SVGPathElement;
+      return { close110: path.getPointAtLength(0).y, close100: path.getPointAtLength(path.getTotalLength()).y };
+    });
+    await page.getByRole('button', { name: 'Candle', exact: true }).click();
+    const candles = page.locator('.recharts-bar').last().locator('.recharts-bar-rectangle');
+    await expect(candles).toHaveCount(2);
+    await expect(candles.nth(0).locator('rect')).toHaveAttribute('fill', 'var(--green)');
+    await expect(candles.nth(1).locator('rect')).toHaveAttribute('fill', 'var(--red)');
+    const expectedY = (price: number) => reference.close100 + (price - 100) * (reference.close110 - reference.close100) / 10;
+    for (const candle of await candles.all()) {
+      const body = candle.locator('rect'), wick = candle.locator('line');
+      assert.ok(Math.abs(Number(await body.getAttribute('y')) - expectedY(110)) < 1, 'Body top matches the plotted price110');
+      assert.ok(Math.abs(Number(await body.getAttribute('height')) - Math.abs(expectedY(100) - expectedY(110))) < 1, 'Body height spans100 to110');
+      assert.ok(Math.abs(Number(await wick.getAttribute('y1')) - expectedY(120)) < 1, 'Wick high matches price120');
+      assert.ok(Math.abs(Number(await wick.getAttribute('y2')) - expectedY(90)) < 1, 'Wick low matches price90');
+    }
+  });
 } finally {
   await browser?.close();
   if (web && web.exitCode == null) {
