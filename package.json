@@ -29,7 +29,7 @@
     "test:market": "python3 -m unittest discover -s services/yfinance -v",
     "market:probe:yfinance": "npm run --silent market:probe:yfinance --workspace @paper/server",
     "test:browser:audit": "npm run build:web && TEST_DATABASE_ADMIN_URL=postgresql://paper_test_admin:paper_test_admin_only@127.0.0.1:55439/paper_foundation_test_admin npm exec --workspace @paper/server -- tsx test/audit.browser.e2e.ts",
-    "test:deploy": "python3 -m unittest discover -s deploy/pern/test -p test_compose_entry.py -v"
+    "test:deploy": "python3 -m unittest discover -s deploy/pern/test -v"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

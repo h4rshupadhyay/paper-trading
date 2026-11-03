@@ -123,7 +123,7 @@ npm run test:db:down
 
 With the market-data virtual environment activated, run `npm run test:market` for the offline Python service tests.
 
-Run `npm run test:deploy` to verify the Compose entry points with dummy secrets; this does not start the app.
+With Docker running, `npm run test:deploy` checks Compose entry points and trusted-ingress behavior using temporary containers and dummy secrets. It does not use the app database or volumes.
 
 Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
 

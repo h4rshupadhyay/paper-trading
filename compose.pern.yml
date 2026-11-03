@@ -73,6 +73,8 @@ services:
       timeout: 5s
       retries: 3
   web:
+    environment:
+      TRUSTED_INGRESS_CIDR: ${TRUSTED_INGRESS_CIDR:-127.0.0.1/32}
     build:
       context: .
       dockerfile: deploy/pern/web.Dockerfile
