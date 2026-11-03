@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   FileText, Plus, Trash2, Save, Tag, X, Loader2,
 } from 'lucide-react'
@@ -14,6 +14,8 @@ export default function Notes() {
   const [saving, setSaving]         = useState(false)
   const [deleting, setDeleting]     = useState(false)
   const [toast, setToast]           = useState(null)
+  const editorRequest = useRef(0)
+  useEffect(() => () => { editorRequest.current += 1 }, [])
 
   // editor fields
   const [title, setTitle]           = useState('')
@@ -37,9 +39,11 @@ export default function Notes() {
   useEffect(() => { fetchList() }, [fetchList])
 
   const openNote = async (stub) => {
+    const request = ++editorRequest.current
     setIsNew(false)
     try {
       const { data } = await notesAPI.get(stub.note_id)
+      if (request !== editorRequest.current) return
       setSelected(data)
       setTitle(data.title)
       setBody(data.body || '')
@@ -48,6 +52,7 @@ export default function Notes() {
   }
 
   const startNew = () => {
+    editorRequest.current += 1
     setSelected(null)
     setIsNew(true)
     setTitle('')
@@ -98,6 +103,7 @@ export default function Notes() {
   }
 
   const closeEditor = () => {
+    editorRequest.current += 1
     setSelected(null)
     setIsNew(false)
   }

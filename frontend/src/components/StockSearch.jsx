@@ -97,12 +97,14 @@ export default function StockSearch() {
 
   // Instant local filter on every keystroke
   useEffect(() => {
+    let cancelled = false
     clearTimeout(apiTimerRef.current)
 
     const q = query.trim()
     if (!q) {
       setResults([])
       setOpen(false)
+      setLoading(false)
       return
     }
 
@@ -123,15 +125,17 @@ export default function StockSearch() {
       apiTimerRef.current = setTimeout(() => {
         stocksAPI.search(q)
           .then(({ data }) => {
+            if (cancelled) return
             setResults(data || [])
             setOpen(true)
             setActiveIdx(-1)
           })
-          .catch(() => setResults([]))
-          .finally(() => setLoading(false))
+          .catch(() => { if (!cancelled) setResults([]) })
+          .finally(() => { if (!cancelled) setLoading(false) })
       }, 350)
     }
-  }, [query])
+    return () => { cancelled = true; clearTimeout(apiTimerRef.current) }
+  }, [query, regionId])
 
   // Close on outside click
   useEffect(() => {

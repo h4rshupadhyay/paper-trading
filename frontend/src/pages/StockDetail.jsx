@@ -22,7 +22,11 @@ function StatItem({ label, value }) {
 }
 
 export default function StockDetail() {
-  const { ticker }  = useParams()
+  const { ticker } = useParams()
+  return <InstrumentDetail key={ticker} ticker={ticker} />
+}
+
+function InstrumentDetail({ ticker }) {
   const navigate    = useNavigate()
   const { formatPrice, region } = useRegion()
 
