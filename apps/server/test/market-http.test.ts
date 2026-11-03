@@ -38,7 +38,7 @@ it('refreshes all supported FX currencies before any instrument is requested',as
   const result=await request(app).get('/api/fx-rates').set('Cookie',cookie);
   expect(result.status).toBe(200); expect(result.body.baseCurrency).toBe('INR');
   expect(result.body.items).toHaveLength(6);
-  expect(result.body.items.find((i:{currency:string})=>i.currency==='GBP')).toMatchObject({rate:'105.000000000000',quality:'fresh'});
+  expect(result.body.items.find((i:{currency:string})=>i.currency==='GBP')).toMatchObject({rate:'105.000000000000',quality:'fresh',provider:'fixture'});
 });
 it('accepts selected chart periods and intervals and rejects unsupported or repeated arguments',async()=>{
   const found=await request(app).get('/api/instruments?q=AAPL').set('Cookie',cookie); const id=found.body.items[0].id;

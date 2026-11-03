@@ -1,6 +1,6 @@
 import {createContext,useContext,useState,useEffect,useCallback} from 'react'
 import {currencyAPI} from '../services/api'
-import {currencyForSymbol,displayNumber} from '../services/contracts'
+import {currencyForSymbol,convertDisplayCurrency} from '../services/contracts'
 export const tickerCurrency=currencyForSymbol
 export const REGIONS = [
   {
@@ -75,26 +75,23 @@ export const REGIONS = [
 const RegionContext=createContext(null)
 export function RegionProvider({children}) {
   const [regionId,setRegionId]=useState(()=>localStorage.getItem('region')||'IN')
-  const [rates,setRates]=useState({INR:1}),[ratesLoaded,setRatesLoaded]=useState(false)
+  const [rates,setRates]=useState({}),[ratesLoaded,setRatesLoaded]=useState(false)
+  const [fxAsOf,setFxAsOf]=useState(Date.now)
   const region=REGIONS.find(value=>value.id===regionId)||REGIONS[1]
   useEffect(()=>localStorage.setItem('region',regionId),[regionId])
   useEffect(()=>{
     const load=()=>currencyAPI.rates().then(({data})=>{
-      const next={INR:1}
-      for(const item of data.items??[])if(item.quality==='fresh' && displayNumber(item.rate)>0)next[item.currency]=displayNumber(item.rate)
-      setRates(next);setRatesLoaded(true)
+      const next={}
+      for(const item of data.items??[])next[item.currency]=item
+      setRates(next);setFxAsOf(Date.now());setRatesLoaded(true)
     }).catch(()=>setRatesLoaded(true))
     load();window.addEventListener('paper:authenticated',load)
-    const timer=setInterval(load,60000)
+    const timer=setInterval(()=>{setFxAsOf(Date.now());load()},60000)
     return()=>{clearInterval(timer);window.removeEventListener('paper:authenticated',load)}
   },[])
   const convert=useCallback((value,source,target=region.currency)=>{
-    const num=displayNumber(value)
-    if(num==null || !source)return null
-    if(source===target)return num
-    if(!rates[source] || !rates[target])return null
-    return displayNumber(num*rates[source]/rates[target])
-  },[rates,region.currency])
+    return convertDisplayCurrency(value,source,target,rates)
+  },[rates,region.currency,fxAsOf])
   const format=useCallback((value,source,opts={})=>{
     const number=convert(value,source)
     if(number==null)return `${region.symbol}—`
@@ -106,6 +103,6 @@ export function RegionProvider({children}) {
     return format(value,opts.from??region.stockCurrency,opts)
   },[format,region.stockCurrency])
   const toUSD=useCallback((value,fromCurrency)=>convert(value,fromCurrency,'USD'),[convert])
-  return <RegionContext.Provider value={{region,regionId,setRegionId,rates,ratesLoaded,formatCurrency,formatPrice,toUSD}}>{children}</RegionContext.Provider>
+  return <RegionContext.Provider value={{region,regionId,setRegionId,rates,ratesLoaded,fxAsOf,formatCurrency,formatPrice,toUSD}}>{children}</RegionContext.Provider>
 }
 export function useRegion(){const context=useContext(RegionContext);if(!context)throw Error('RegionProvider required');return context}

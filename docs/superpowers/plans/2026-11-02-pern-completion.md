@@ -1,6 +1,8 @@
 # PERN Completion Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+Status: implemented, independently reviewed and verified on3 November2026. All Important findings are fixed. Live execution remains gated by provider acceptance; integration choice is pending. See [results, limits and deferred minors](2026-11-02-pern-completion-results.md).
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace all Flask/Oracle runtime dependencies with a complete tested React/Express/Node/PostgreSQL application, retaining the current user-facing features.
 **Architecture:** Continue the accepted modular backend, cookie sessions and durable ledger. Provider observations feed shared trading/worker services; React uses explicit adapters for the resource API. Keep legacy source/data intact while providing a separate PERN Compose stack.
@@ -40,45 +42,45 @@ Tools service/router exports `toolsRoutes(deps):Router`, `evaluateAlerts(pool):P
 ### Task 1: Integration platform and contract evolution
 **Files:** platform migration/config/http; old tests; plan/spec/progress.
 **Interfaces:** migration targetVersion optional, latest version 4; shared requireMutation verifies session+CSRF.
-- [ ] Write failing upgrade/HTTP encoding tests, run red.
-- [ ] Extend ordered migrations without modifying 001, allow explicit historical targets; version-check readiness.
-- [ ] Preserve historical tests at target1, compiled acceptance at latest; map encoding failures to415.
-- [ ] Verify baseline and upgrade tests; commit platform changes.
+- [x] Write failing upgrade/HTTP encoding tests, run red.
+- [x] Extend ordered migrations without modifying 001, allow explicit historical targets; version-check readiness.
+- [x] Preserve historical tests at target1, compiled acceptance at latest; map encoding failures to415.
+- [x] Verify baseline and upgrade tests; commit platform changes.
 
 ### Task 2: Market data and provider acceptance
 **Files:** `migrations/002_market.sql`, `modules/market-data/*`, `test/market*.test.ts`, `docs/PERN_PROVIDER_VALIDATION.md` only.
 **Interfaces:** frozen market tables/exports above. No root/manifest edits; use native fetch with bounded timeout, explicit fixture provider.
-- [ ] Write red normalization/freshness/monotonic persistence/locking/provider-failure tests with real DB.
-- [ ] Implement instruments, quotes/FX, discovery/history, safe live provider adapter and explicit deterministic fixture mode; identify sources and live acceptance status for six regions.
-- [ ] Live probes never claim successful validation when blocked; per-market trading stays unavailable without complete proof. Preserve known observations on outage.
-- [ ] Verify focused tests/typecheck, report files and actual checks.
+- [x] Write red normalization/freshness/monotonic persistence/locking/provider-failure tests with real DB.
+- [x] Implement instruments, quotes/FX, discovery/history, safe live provider adapter and explicit deterministic fixture mode; identify sources and live acceptance status for six regions.
+- [x] Live probes never claim successful validation when blocked; per-market trading stays unavailable without complete proof. Preserve known observations on outage.
+- [x] Verify focused tests/typecheck, report files and actual checks.
 
 ### Task 3: Owned user tools
 **Files:** `migrations/003_tools.sql`, `modules/user-tools/*`, `test/tools*.test.ts` only.
 **Interfaces:** frozen routes/exports above; consume market instrument IDs and requireMutation.
-- [ ] Red tests for every CRUD family, second-owner attacks, default-folder deletion, move/dedup and concurrent one-shot alerts.
-- [ ] Implement ownership SQL constraints and atomic operations. Validate strict IDs/text/decimal input; bounded cursor pagination, timestamps, exact decimal comparisons in SQL.
-- [ ] Verify real DB tests/typecheck, report files and actual checks.
+- [x] Red tests for every CRUD family, second-owner attacks, default-folder deletion, move/dedup and concurrent one-shot alerts.
+- [x] Implement ownership SQL constraints and atomic operations. Validate strict IDs/text/decimal input; bounded cursor pagination, timestamps, exact decimal comparisons in SQL.
+- [x] Verify real DB tests/typecheck, report files and actual checks.
 
 ### Task 4: Trading, portfolio and worker
 **Files:** `migrations/004_trading.sql`, `modules/trading/*`, `modules/portfolio/*`, worker entrypoint/tests; coordinator composes app/scripts.
 **Interfaces:** frozen trading/portfolio above; tables orders,executions,positions,portfolio_snapshots,worker_status. Ledger reasons BUY/SELL with execution FK, restricted UPDATE accounts columns only; no ledger mutations.
-- [ ] Red tests: idempotency replay during outage; concurrent insufficient buys/sells; partial/full cost basis, FX and rounding; injected rollback; limit/stop/gap/expiry/cancel races; null valuation; snapshots/restart.
-- [ ] Implement exact SQL arithmetic, account serialization and bounded retries; validate inputs before accepting, fetch outside transaction then recheck observations inside. Expiry even without quote; inactive account rejects live orders.
-- [ ] Implement bounded worker loop, refresh -> pending -> alerts -> snapshots, heartbeat and graceful stop. No overlapping loops or startup DDL/seed.
-- [ ] Verify focused tests, then full backend suite/typecheck/build; commit.
+- [x] Red tests: idempotency replay during outage; concurrent insufficient buys/sells; partial/full cost basis, FX and rounding; injected rollback; limit/stop/gap/expiry/cancel races; null valuation; snapshots/restart.
+- [x] Implement exact SQL arithmetic, account serialization and bounded retries; validate inputs before accepting, fetch outside transaction then recheck observations inside. Expiry even without quote; inactive account rejects live orders.
+- [x] Implement bounded worker loop, refresh -> pending -> alerts -> snapshots, heartbeat and graceful stop. No overlapping loops or startup DDL/seed.
+- [x] Verify focused tests, then full backend suite/typecheck/build; commit.
 
 ### Task 5: Retained React integration
 **Files:** `frontend/src` network/context/pages/components, Vite config, frontend tests; coordinator-owned only.
 **Interfaces:** resource API via adapters; cookie/CSRF with real logout, decimal input strings, canonical IDs and per-intent idempotency key. All ten existing routes retained.
-- [ ] Add failing adapter/route smoke tests with actual API or controlled network boundary.
-- [ ] Replace bearer/localStorage auth, add adapters, retain styles and navigation, update currencies/quality/nulls and order policy. No suffix-based accounting, hardcoded FX or browser price authority.
-- [ ] Verify frontend build and all ten routed flows with real PostgreSQL/fixture API, cross-owner and failed provider states.
+- [x] Add failing adapter/route smoke tests with actual API or controlled network boundary.
+- [x] Replace bearer/localStorage auth, add adapters, retain styles and navigation, update currencies/quality/nulls and order policy. No suffix-based accounting, hardcoded FX or browser price authority.
+- [x] Verify frontend build and all ten routed flows with real PostgreSQL/fixture API, cross-owner and failed provider states.
 
 ### Task 6: Deployment and final acceptance
 **Files:** new PERN compose/Dockerfiles/nginx/setup docs/environment examples, root scripts; preserve legacy Compose/data.
 **Interfaces:** same-origin web/API, compiled API+worker, explicit migration one-shot owner service, persistent new PostgreSQL volume. Secrets supplied explicitly; fixtures prohibited in production.
-- [ ] Add/run failing process acceptance for complete order lifecycle, worker restart, data persistence and retained API contracts.
-- [ ] Wire clean dev start, explicit migrations, build/run/health/backup procedures; no deploy to external host.
-- [ ] Run full typecheck/unit/integration/build, clean Compose validation and page smoke checks; fresh whole-branch SOL review and resolve blockers.
-- [ ] Record truthful provider acceptance limits and test evidence. Keep reviewable feature branch until integration is chosen.
+- [x] Add/run failing process acceptance for complete order lifecycle, worker restart, data persistence and retained API contracts.
+- [x] Wire clean dev start, explicit migrations, build/run/health/backup procedures; no deploy to external host.
+- [x] Run full typecheck/unit/integration/build, clean Compose validation and page smoke checks; fresh whole-branch SOL review and resolve blockers.
+- [x] Record truthful provider acceptance limits and test evidence. Keep reviewable feature branch until integration is chosen.

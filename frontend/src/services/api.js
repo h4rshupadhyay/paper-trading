@@ -28,14 +28,18 @@ async function instrument(symbol) {
     item=data.items.find(value=>value.symbol.toUpperCase()===symbol.toUpperCase())
   }
   if(!item) throw new Error('Instrument unavailable')
+  if(typeof item.tradable!=='boolean' || !item.provider || !item.name){
+    const {data}=await api.get(`/instruments/${item.id}`)
+    item=rememberInstrument(data.instrument)
+  }
   return item
 }
-async function all(path,params={}) {
+async function all(path,params={},maxItems=10000) {
   const items=[];let cursor
   do {
     const {data}=await api.get(path,{params:{...params,limit:100,...(cursor?{cursor}:{})}})
     items.push(...data.items);cursor=data.nextCursor
-  } while(cursor && items.length<10000)
+  } while(cursor && items.length<maxItems)
   return items
 }
 function stock(item){rememberInstrument(item);return {...item,ticker:item.symbol,company_name:item.name}}
@@ -86,8 +90,8 @@ export const tradingAPI={
   },
 }
 export const portfolioAPI={get:()=>mapped(api.get('/portfolio'),adaptPortfolio),
-  snapshots:days=>mapped(api.get('/portfolio/snapshots',{params:{days}}),data=>({snapshots:data.items.slice().reverse().map(item=>({
-    ...item,snapshot_at:item.sampledAt,timestamp:item.sampledAt,date:item.sampledAt,total_value:displayNumber(item.totalValue),cash_balance:displayNumber(item.cashValue??item.cashBalance),holdings_value:displayNumber(item.holdingsValue)}))}))}
+  snapshots:async days=>({data:{snapshots:(await all('/portfolio/snapshots',{days},Infinity)).reverse().map(item=>({
+    ...item,snapshot_at:item.sampledAt,timestamp:item.sampledAt,date:item.sampledAt,total_value:displayNumber(item.totalValue),cash_balance:displayNumber(item.cashValue??item.cashBalance),holdings_value:displayNumber(item.holdingsValue)}))}})}
 export const watchlistAPI={
   get:()=>mapped(api.get('/watchlists'),data=>{const defaultId=data.folders.find(f=>f.isDefault)?.id;return{
     folders:data.folders.filter(f=>!f.isDefault).map(f=>({...f,folder_id:f.id})),watchlist:data.items.map(item=>entry(item,defaultId))}}),

@@ -69,7 +69,7 @@ function CustomTooltip({ active, payload, label, chartType, fp }) {
 }
 
 export default function PriceChart({ ticker }) {
-  const { formatPrice, region } = useRegion()
+  const { formatPrice } = useRegion()
   const priceCurr = tickerCurrency(ticker)
   const fp = (n) => n != null ? formatPrice(n, { from: priceCurr }) : '—'
 
@@ -149,11 +149,11 @@ export default function PriceChart({ ticker }) {
           <YAxis
             yAxisId="price"
             domain={[minPrice, maxPrice]}
-            tickFormatter={(v) => `${region.symbol}${v.toFixed(0)}`}
+            tickFormatter={(v) => formatPrice(v, { from: priceCurr, decimals: 0 })}
             tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
             tickLine={false}
             axisLine={false}
-            width={60}
+            width={90}
           />
           <YAxis
             yAxisId="volume"

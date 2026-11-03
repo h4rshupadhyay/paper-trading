@@ -48,9 +48,33 @@ try {
  const reconciliation=await(await page.request.get(`${origin}/api/account/reconciliation`)).json();assert.equal(reconciliation.balanced,true);
  await page.goto(`${origin}/stocks/AAPL`);await page.getByRole('button',{name:/^Trade$/}).click();await page.locator('.zk-inputs input').first().fill('1.0000');await page.locator('.zk-btn-submit').click();await expect(page.locator('.zk-card')).toHaveCount(0);
  await page.goto(`${origin}/dashboard`);const usdRow=page.locator('tbody tr').filter({hasText:'AAPL'});await expect(usdRow.locator('td').nth(4)).toHaveText('₹12,450.00');
+ const reviewFailures:unknown[]=[];
+ await page.goto(`${origin}/stocks/AAPL`);
+ try {await expect(page.locator('.price-chart .recharts-yAxis').first()).toContainText('₹12,');}catch(error){reviewFailures.push(error);}
+ const gap=await page.request.post(`${origin}/api/orders`,{headers:{...headers,'Idempotency-Key':'browser-gap-cancel'},data:{instrumentId,side:'BUY',type:'STOP_LIMIT',quantity:'1',stopPrice:'100',limitPrice:'90'}});
+ assert.equal(gap.status(),201);const gapId=(await gap.json()).order.id;await evaluatePending(h.appPool);
+ await page.goto(`${origin}/pending-orders`);await page.getByRole('button',{name:'TRIGGERED',exact:true}).click();
+ try {
+  const row=page.locator('tbody tr').filter({hasText:'RELIANCE.NS'});
+  await expect(row.getByTitle('Cancel order')).toBeVisible();await row.getByTitle('Cancel order').click();
+  await expect(row).toHaveCount(0);
+  assert.equal((await(await page.request.get(`${origin}/api/orders/${gapId}`)).json()).order.status,'CANCELLED');
+ }catch(error){reviewFailures.push(error);}
+ if(reviewFailures.length)throw new AggregateError(reviewFailures,'Review regressions: converted chart axis and triggered-order cancellation');
  await page.goto(`${origin}/notes`);await page.getByRole('button',{name:'New',exact:true}).click();await page.getByPlaceholder('Note title…').fill('Saved through React');await page.locator('.notes-editor-panel textarea').fill('Persistent UI note');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.locator('.notes-list')).toContainText('Saved through React');await page.reload();await expect(page.locator('.notes-list')).toContainText('Saved through React');
  await page.goto(`${origin}/dashboard`);await expect(page.locator('tbody')).toContainText('RELIANCE.NS');await page.waitForLoadState('networkidle');await page.screenshot({path:'/tmp/pern-dashboard.png',fullPage:true});
  assert.deepEqual(errors,[],'No React crashes on any retained route');assert.deepEqual(badResponses,[],'No API contract failures from retained pages');
+ // Advance only the browser clock: sessions and provider fixtures remain valid server-side.
+ const fxObservedAt=new Date(Date.now()-86400000+30000).toISOString();let fxOutage=false;
+ await page.route('**/api/fx-rates',async route=>{
+  if(fxOutage){await route.abort();return;}
+  await route.fulfill({json:{items:[{currency:'USD',rate:'83',quality:'fresh',provider:'fixture',observedAt:fxObservedAt}],baseCurrency:'INR'}});
+ });
+ await page.clock.install();
+ await page.goto(`${origin}/stocks/AAPL`);await expect(page.locator('.stock-price')).toHaveText('₹12,450.00');
+ fxOutage=true;await page.clock.fastForward(120000);
+ await expect(page.locator('.stock-price')).toHaveText('₹—');
+ await expect(page.locator('[role="status"]').filter({hasText:'FX estimates'})).toContainText('unavailable');
  const logout=await page.request.post(`${origin}/api/auth/logout`,{headers});assert.equal(logout.status(),204);await page.reload();await expect(page).toHaveURL(/\/login$/);
  console.log('PASS: 10 retained routes; browser register/login/market buy; owned tools, alert/pending execution, analytics, logout; no browser or API errors');
 } finally {await browser?.close();for(const child of processes.reverse())await stop(child);await h.close();}

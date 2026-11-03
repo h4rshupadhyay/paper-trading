@@ -1,7 +1,11 @@
 // Numeric conversion is confined to presentation; all submitted decimals stay strings.
 const instruments = new Map()
 export function rememberInstrument(instrument) {
-  if (instrument?.symbol) instruments.set(instrument.symbol.toUpperCase(), instrument)
+  if (instrument?.symbol) {
+    const key=instrument.symbol.toUpperCase()
+    const previous=instruments.get(key)
+    instruments.set(key,{...(previous?.id===instrument.id?previous:{}),...instrument})
+  }
   return instrument
 }
 export const instrumentForSymbol = symbol => instruments.get(symbol?.toUpperCase())
@@ -10,6 +14,20 @@ export function displayNumber(value) {
   if (value == null || value === '') return null
   const number = Number(value)
   return Number.isFinite(number) && Math.abs(number) <= 1e15 ? number : null
+}
+export function convertDisplayCurrency(value,source,target,observations,now=Date.now()) {
+  const number=displayNumber(value)
+  if(number==null || !source || !target)return null
+  if(source===target)return number
+  const rate=currency=>{
+    if(currency==='INR')return 1
+    const item=observations[currency],observedAt=Date.parse(item?.observedAt)
+    const value=displayNumber(item?.rate)
+    return item?.quality==='fresh' && Number.isFinite(observedAt)
+      && now-observedAt<=86400000 && observedAt-now<=5000 && value>0 ? value : null
+  }
+  const from=rate(source),to=rate(target)
+  return from && to ? displayNumber(number*from/to) : null
 }
 export function orderIntent(instrumentId, input) {
   const intent = { instrumentId, side: input.side, type: input.type, quantity: String(input.quantity) }

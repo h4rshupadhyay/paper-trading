@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useRegion, REGIONS, tickerCurrency } from '../context/RegionContext'
 import StockSearch from './StockSearch'
 import { alertsAPI, stocksAPI } from '../services/api'
+import { convertDisplayCurrency } from '../services/contracts'
 
 /* ── Notification bell ─────────────────────────────────────────── */
 function NotificationBell() {
@@ -200,11 +201,22 @@ function IndexTicker() {
 /* ── Header ────────────────────────────────────────────────────── */
 export default function Header({ title }) {
   const { theme, toggleTheme } = useTheme()
+  const { rates, ratesLoaded, fxAsOf } = useRegion()
+  const observations=Object.values(rates).filter(item=>item.currency!=='INR')
+  const fresh=observations.filter(item=>convertDisplayCurrency('1',item.currency,'INR',rates,fxAsOf)!=null)
+  const sources=[...new Set(observations.map(item=>item.provider??'unknown source'))].join(', ')
+  const times=fresh.map(item=>Date.parse(item.observedAt)).filter(Number.isFinite)
+  const oldest=times.length?new Date(Math.min(...times)):null
+  const fxStatus=!ratesLoaded?'loading':!fresh.length?'unavailable':fresh.length<observations.length?'partly unavailable':'fresh'
+  const fxDetails=observations.map(item=>`${item.currency}: ${item.provider??'unknown source'}, observed ${item.observedAt}, ${convertDisplayCurrency('1',item.currency,'INR',rates,fxAsOf)==null?'unavailable':'fresh'}`).join('\n')
 
   return (
     <header className="topbar">
       <div className="topbar-left">
         {title && <h1 className="page-title">{title}</h1>}
+        <small role="status" className="text-muted" title={fxDetails} style={{display:'block',fontSize:10}}>
+          FX estimates: {fxStatus}{sources?` · ${sources}`:''}{oldest?` · ${oldest.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`:''}
+        </small>
       </div>
 
       <div className="topbar-center">

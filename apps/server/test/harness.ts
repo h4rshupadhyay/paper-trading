@@ -18,10 +18,15 @@ export async function createHarness(): Promise<TestHarness> {
   const admin = new pg.Pool({ connectionString: url.href, max: 1, connectionTimeoutMillis: 3000, statement_timeout: 5000 });
   const database = `paper_test_${randomUUID().replaceAll('-', '')}`;
   let created = false;
+  const connectionsClosed:Promise<void>[]=[];
   const makePool = (role: string, password: string): Pool => {
     const connection = new URL(url);
     connection.pathname = `/${database}`; connection.username = role; connection.password = password;
-    return createPool(connection.href);
+    const pool=createPool(connection.href);
+    pool.on('connect',client=>{
+      connectionsClosed.push(new Promise(resolve=>{client.once('end',resolve);}));
+    });
+    return pool;
   };
   try {
     const client = await admin.connect();
@@ -48,6 +53,8 @@ export async function createHarness(): Promise<TestHarness> {
       closed = true;
       try {
         await Promise.all([ownerPool.end(), appPool.end()]);
+        // pg Pool.end() can resolve before idle clients finish their socket shutdown.
+        await Promise.all(connectionsClosed);
         await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
       } finally { await admin.end(); }
     } };

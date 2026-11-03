@@ -168,7 +168,7 @@ export async function readFxRates(pool: Pool, provider?: MarketProvider) {
       client.release(discard);
     }
   }
-  return { items: (await pool.query(`SELECT currency,rate,
+  return { items: (await pool.query(`SELECT currency,rate,provider,
     to_char(observed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt",
     to_char(fetched_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "fetchedAt",
     CASE WHEN observed_at < clock_timestamp()-interval '24 hours' OR observed_at > clock_timestamp()+interval '5 seconds' THEN 'stale' ELSE 'fresh' END AS quality

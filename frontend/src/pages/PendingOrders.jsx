@@ -172,7 +172,7 @@ export default function PendingOrders() {
                     <th>Filled At</th>
                     <th>Filled Price</th>
                     <th>Expires</th>
-                    {activeTab === 'OPEN' && <th></th>}
+                    {['OPEN', 'TRIGGERED'].includes(activeTab) && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -207,7 +207,7 @@ export default function PendingOrders() {
                       <td className="text-muted">
                         {o.expires_at ? new Date(o.expires_at).toLocaleString() : '—'}
                       </td>
-                      {activeTab === 'OPEN' && (
+                      {['OPEN', 'TRIGGERED'].includes(activeTab) && (
                         <td>
                           <button
                             className="btn btn-sm btn-ghost btn-danger"

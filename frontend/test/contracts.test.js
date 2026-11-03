@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { displayNumber, rememberInstrument, currencyForSymbol, adaptPortfolio, orderIntent } from '../src/services/contracts.js'
+import * as contracts from '../src/services/contracts.js'
+import { displayNumber, rememberInstrument, instrumentForSymbol, currencyForSymbol, adaptPortfolio, adaptOrder, orderIntent } from '../src/services/contracts.js'
 test('missing and out of range values remain unavailable instead of turning into zero', () => {
   assert.equal(displayNumber(null), null)
   assert.equal(displayNumber('NaN'), null)
@@ -21,4 +22,25 @@ test('incomplete portfolio preserves known cash and null total', () => {
 test('order intent preserves submitted decimal strings and excludes browser execution prices', () => {
   assert.deepEqual(orderIntent('canonical',{side:'BUY',type:'MARKET',quantity:'0.1000',price:500}),{instrumentId:'canonical',side:'BUY',type:'MARKET',quantity:'0.1000'})
   assert.deepEqual(orderIntent('canonical',{side:'SELL',type:'STOP_LIMIT',quantity:'1',limitPrice:'10.00000001',stopPrice:'9'}),{instrumentId:'canonical',side:'SELL',type:'STOP_LIMIT',quantity:'1',limitPrice:'10.00000001',stopPrice:'9'})
+})
+test('owned-resource summaries preserve canonical trading metadata', () => {
+  rememberInstrument({id:'cached',symbol:'CACHE',currency:'USD',name:'Cached stock',tradable:true,provider:'fixture'})
+  adaptOrder({instrumentId:'cached',symbol:'CACHE',currency:'USD',quantity:'1'})
+  assert.equal(instrumentForSymbol('CACHE').tradable,true)
+  assert.equal(instrumentForSymbol('CACHE').provider,'fixture')
+  assert.equal(instrumentForSymbol('CACHE').name,'Cached stock')
+})
+test('display conversion expires observations even when refresh fails and keeps source metadata', () => {
+  assert.equal(typeof contracts.convertDisplayCurrency,'function')
+  const now=Date.parse('2026-11-03T12:00:00Z')
+  const usd={currency:'USD',rate:'83',quality:'fresh',provider:'fixture',observedAt:'2026-11-02T12:00:01Z'}
+  const rates={USD:usd}
+  assert.equal(contracts.convertDisplayCurrency('150','USD','INR',rates,now),12450)
+  assert.equal(contracts.convertDisplayCurrency('150','USD','INR',rates,now+2000),null)
+  assert.equal(contracts.convertDisplayCurrency('150','USD','USD',rates,now+2000),150)
+  assert.equal(contracts.convertDisplayCurrency('150','INR','GBP',rates,now),null)
+  assert.equal(contracts.convertDisplayCurrency('150','USD','INR',{USD:{...usd,quality:'stale'}},now),null)
+  assert.equal(contracts.convertDisplayCurrency('150','USD','INR',{USD:{...usd,observedAt:'2026-11-03T12:00:06Z'}},now),null)
+  assert.equal(rates.USD.provider,'fixture')
+  assert.equal(rates.USD.observedAt,usd.observedAt)
 })

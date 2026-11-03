@@ -48,6 +48,8 @@ npm run test:db:down
 
 Browser checks use Playwright and installed Google Chrome; set `CHROME_EXECUTABLE` when Chrome is elsewhere. They create and clean only unique databases in the isolated test instance. Backend tests include concurrency, rollback, idempotency, sessions/CSRF, cash/position reconciliation, stop/expiry/cancel races, missing data, worker coordination and compiled-process restart. Browser acceptance exercises all ten retained routes.
 
+See the [completion verification and review record](docs/superpowers/plans/2026-11-02-pern-completion-results.md) for current acceptance evidence, provider limits and deferred minor findings.
+
 For a separate persistent development database, configure `.env.pern.local` as described in [setup](docs/PERN_SETUP.md), then explicitly run migrations/build. Run the API on port3001, the Vite UI on3000 and the worker in another terminal. The bundled Vite proxy keeps `/api` on the browser's origin.
 
 ## Layout
