@@ -127,6 +127,8 @@ With Docker running, `npm run test:deploy` checks Compose entry points and trust
 
 Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
 
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs these checks on pull requests, pushes to `main`, and manual dispatch. It uses the repository’s Node/npm versions, Python 3.12.16, lockfile installs for both npm projects, and package-matched Playwright Chromium. It also runs the offline Python and Docker deployment tests. Test PostgreSQL is isolated and cleaned up after the checks; application secrets and live market-data access are unnecessary. See the [CI verification record](docs/superpowers/plans/2026-11-04-ci.md) for validation and hosted-run limitations.
+
 ## Project structure
 
 ```text
