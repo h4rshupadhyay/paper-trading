@@ -8,7 +8,7 @@ import { reconcileAccount } from '../src/modules/accounts/reconciliation.js';
 import { migrate } from '../src/platform/migrate.js';
 import { createHarness, type TestHarness } from './harness.js';
 import { YfinanceProvider } from '../src/modules/market-data/yfinance-provider.js';
-import { createAlert, evaluateAlerts } from '../src/modules/user-tools/service.js';
+import { createAlert, createEntry, entries, evaluateAlerts } from '../src/modules/user-tools/service.js';
 import { readPortfolio } from '../src/modules/portfolio/service.js';
 
 let h:TestHarness,userId:string;
@@ -27,6 +27,63 @@ async function setup(symbol='AAPL'){
   await refreshInstrument(h.appPool,item.id,provider);return item;
 }
 const buy=(id:string)=>({instrumentId:id,side:'BUY',type:'MARKET',quantity:'1'});
+
+it('shows recently confirmed yfinance quotes as fresh in the watchlist despite old source times and unknown sessions',async()=>{
+  const item=await setup();
+  const entry=await createEntry(h.appPool,userId,{instrumentId:item.id});
+  expect(entry).toMatchObject({instrumentId:item.id,quality:'FRESH'});
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'FRESH'}),
+  ]);
+});
+
+it('shows yfinance quotes with future receipt times as stale in the watchlist',async()=>{
+  const item=await setup();
+  const entry=await createEntry(h.appPool,userId,{instrumentId:item.id});
+  await h.ownerPool.query("UPDATE latest_quotes SET fetched_at=now()+interval '1 minute' WHERE instrument_id=$1",[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'STALE'}),
+  ]);
+});
+
+it('expires recently confirmed yfinance watchlist quotes when their receipt becomes too old',async()=>{
+  const item=await setup();
+  const entry=await createEntry(h.appPool,userId,{instrumentId:item.id});
+  expect(entry.quality).toBe('FRESH');
+  await h.ownerPool.query("UPDATE latest_quotes SET fetched_at=now()-interval '61 seconds' WHERE instrument_id=$1",[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'STALE'}),
+  ]);
+});
+
+it('keeps future observations and missing yfinance quotes unavailable for a fresh watchlist price',async()=>{
+  const item=await setup();
+  const entry=await createEntry(h.appPool,userId,{instrumentId:item.id});
+  await h.ownerPool.query("UPDATE latest_quotes SET observed_at=now()+interval '1 minute' WHERE instrument_id=$1",[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'STALE'}),
+  ]);
+  await h.ownerPool.query('DELETE FROM latest_quotes WHERE instrument_id=$1',[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,price:null,quality:'UNAVAILABLE'}),
+  ]);
+});
+
+it.each(['fixture','yahoo'])('retains source-age and session quality rules for %s watchlist quotes',async name=>{
+  const strictProvider:MarketProvider={...provider,name};
+  const item=(await discoverInstruments(h.appPool,'AAPL',strictProvider))[0]!;
+  await refreshInstrument(h.appPool,item.id,strictProvider);
+  const entry=await createEntry(h.appPool,userId,{instrumentId:item.id});
+  expect(entry.quality).toBe('STALE');
+  await h.ownerPool.query("UPDATE latest_quotes SET observed_at=now() WHERE instrument_id=$1",[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'UNAVAILABLE'}),
+  ]);
+  await h.ownerPool.query("UPDATE latest_quotes SET session='CLOSED' WHERE instrument_id=$1",[item.id]);
+  expect((await entries(h.appPool,userId,{after:null,limit:50})).items).toEqual([
+    expect.objectContaining({id:entry.id,quality:'CLOSED'}),
+  ]);
+});
 
 it('fills at yfinance observations across six currencies despite old source times and unknown sessions',async()=>{
   const samples=['AAPL','RELIANCE.NS','VOD.L','SAP.DE','7203.T','0700.HK'];

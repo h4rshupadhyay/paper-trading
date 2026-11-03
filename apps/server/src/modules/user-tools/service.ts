@@ -12,7 +12,9 @@ const alertFields = `a.id,a.instrument_id AS "instrumentId",i.symbol,i.currency,
   a.active,a.created_at AS "createdAt",a.triggered_at AS "triggeredAt"`;
 const entryFields = `e.id,e.folder_id AS "folderId",e.instrument_id AS "instrumentId",i.symbol,i.name,i.currency,q.price,
   CASE WHEN q.price IS NULL OR i.paused THEN 'UNAVAILABLE'
-    WHEN q.observed_at<now()-interval '60 seconds' OR q.observed_at>now()+interval '5 seconds' THEN 'STALE'
+    WHEN CASE WHEN q.provider='yfinance' THEN q.fetched_at ELSE q.observed_at END<now()-interval '60 seconds'
+      OR q.observed_at>now()+interval '5 seconds' OR q.fetched_at>now()+interval '5 seconds' THEN 'STALE'
+    WHEN q.provider='yfinance' THEN 'FRESH'
     WHEN q.session='REGULAR' THEN 'FRESH' WHEN q.session='CLOSED' THEN 'CLOSED' ELSE 'UNAVAILABLE' END AS quality`;
 const entryFrom = 'watchlist_entries e JOIN instruments i ON i.id=e.instrument_id LEFT JOIN latest_quotes q ON q.instrument_id=i.id';
 const missing = () => new AppError(404, 'NOT_FOUND', 'Resource not found');
