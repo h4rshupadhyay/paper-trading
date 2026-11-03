@@ -16,7 +16,7 @@
 - [x] **4 — folder UUID:** select a named folder through the Add form; assert the resulting entry's folder through the API. Preserve UUID strings. Commit `fix: preserve watchlist folder UUID selections`.
 - [x] **5 — visible failures:** failed note save preserves draft and displays retryable error; extend the pattern to loads and other audited tools in vertical slices. Commit `fix: surface resource errors without discarding user input`.
 - [x] **6 — watchlist quality:** authenticated watchlist response for a recently received old/UNKNOWN yfinance quote agrees with quote availability; expired receipts remain stale. Align the query without weakening execution checks. Commit `fix: apply yfinance receipt policy to watchlist quotes`.
-- [ ] **7 — duplicate misses:** concurrent public quote requests for the same key share upstream work while another key can progress; failure permits retry and limits remain bounded. Python offline RED/GREEN. Commit `fix: coalesce concurrent market-data cache misses`.
+- [x] **7 — duplicate misses:** concurrent public quote requests for the same key share upstream work while another key can progress; failure permits retry and limits remain bounded. Python offline RED/GREEN. Commit `fix: coalesce concurrent market-data cache misses`.
 - [ ] **8 — default startup:** invoke default Compose configuration with controlled env and assert PERN services; archive legacy entry point, preserve project/volume and explicit PERN command. Commit `fix: make PERN the default compose entry point`.
 - [ ] **9 — trusted proxy:** actual nginx distinguishes forwarded clients from a configured trusted peer and ignores spoofed forwarded addresses from untrusted peers; trusted ingress remains opt-in. Commit `fix: preserve client identity through trusted ingress`.
 
@@ -49,3 +49,7 @@ RED, in successive browser slices: missing error for failed note save/list/open/
 ### Task 6 — watchlist receipt policy
 
 RED: a recently received old/UNKNOWN yfinance quote returned STALE instead of FRESH; then a future receipt incorrectly returned FRESH instead of STALE. GREEN:21 targeted tools/yfinance integration tests and the complete215-test integration suite pass. The watchlist uses receipt age for yfinance and keeps source-age/session rules for fixture/Yahoo, missing quotes UNAVAILABLE and expired/future inputs STALE. Existing uppercase DTO quality names and execution checks are preserved. Independent review found no blocker.
+
+### Task 7 — shared market requests
+
+RED: concurrent requests for one quote occupied both provider slots. GREEN: all16 offline Python tests pass, including shared same-key work, independent instruments, upstream failure/retry, bounded capacity, and independent returned copies. Per-key Futures share in-flight results; the cache lock covers bookkeeping only. Owner timeouts end the shared flight; any still-running upstream operation retains its capacity slot until completion, preserving the existing limit. Independent review found no blocker.

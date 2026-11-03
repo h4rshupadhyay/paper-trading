@@ -1,6 +1,8 @@
 import copy
 import importlib.util
 import pathlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -89,6 +91,114 @@ class ServiceTests(unittest.TestCase):
             result=self.service.history('VOD.L','1mo','15m')
         self.assertEqual(result['items'][0]['volume'],'9007199254740993')
         self.assertEqual(result['items'][0]['open'],'123.5')
+    def test_concurrent_quotes_share_one_pending_provider_observation(self):
+        entered = threading.Event()
+        duplicate = threading.Event()
+        release = threading.Event()
+        follower_started = threading.Event()
+        calls = []
+        original = FakeTicker.history
+
+        def pending(ticker, **kwargs):
+            calls.append(ticker.symbol)
+            if len(calls) > 1:
+                duplicate.set()
+            entered.set()
+            if not release.wait(2):
+                raise RuntimeError('test provider was not released')
+            return original(ticker, **kwargs)
+
+        def follower():
+            follower_started.set()
+            return self.service.quote('VOD.L')
+
+        with patch.object(FakeTicker, 'history', pending), ThreadPoolExecutor(max_workers=2) as clients:
+            first = clients.submit(self.service.quote, 'VOD.L')
+            try:
+                self.assertTrue(entered.wait(1))
+                second = clients.submit(follower)
+                self.assertTrue(follower_started.wait(1))
+                self.assertFalse(duplicate.wait(0.1), 'same quote occupied both provider slots')
+            finally:
+                release.set()
+            first_quote = first.result(timeout=1)
+            second_quote = second.result(timeout=1)
+        self.assertEqual(second_quote, first_quote)
+        self.assertEqual(first_quote['quote']['rawPrice'], '123.123456789012345678901')
+        self.assertEqual(calls, ['VOD.L'])
+
+    def test_pending_quote_leaves_capacity_for_another_instrument(self):
+        entered = threading.Event()
+        release = threading.Event()
+        follower_started = threading.Event()
+        original = FakeTicker.history
+
+        def pending(ticker, **kwargs):
+            if ticker.symbol == 'VOD.L':
+                entered.set()
+                if not release.wait(2):
+                    raise RuntimeError('test provider was not released')
+            return original(ticker, **kwargs)
+
+        def metadata(ticker, repair):
+            return {**META, 'symbol': ticker.symbol}
+
+        def follower():
+            follower_started.set()
+            return self.service.quote('VOD.L')
+
+        with patch.object(FakeTicker, 'history', pending), patch.object(FakeTicker, 'get_history_metadata', metadata), ThreadPoolExecutor(max_workers=2) as clients:
+            first = clients.submit(self.service.quote, 'VOD.L')
+            try:
+                self.assertTrue(entered.wait(1))
+                second = clients.submit(follower)
+                self.assertTrue(follower_started.wait(1))
+                other = self.service.quote('AAPL')
+                self.assertEqual(other['instrument']['symbol'], 'AAPL')
+            finally:
+                release.set()
+            self.assertEqual(first.result(timeout=1), second.result(timeout=1))
+
+    def test_failed_shared_quote_returns_503_to_waiters_and_can_retry(self):
+        entered = threading.Event()
+        duplicate = threading.Event()
+        release = threading.Event()
+        follower_started = threading.Event()
+        attempts = []
+
+        def failing(ticker, **kwargs):
+            attempts.append(ticker.symbol)
+            if len(attempts) > 1:
+                duplicate.set()
+            entered.set()
+            if not release.wait(2):
+                raise RuntimeError('test provider was not released')
+            raise RuntimeError('provider unavailable')
+
+        def follower():
+            follower_started.set()
+            return app.route(self.service, '/quote?symbol=VOD.L')
+
+        with patch.object(FakeTicker, 'history', failing), ThreadPoolExecutor(max_workers=2) as clients:
+            first = clients.submit(app.route, self.service, '/quote?symbol=VOD.L')
+            try:
+                self.assertTrue(entered.wait(1))
+                second = clients.submit(follower)
+                self.assertTrue(follower_started.wait(1))
+                self.assertFalse(duplicate.wait(0.1))
+            finally:
+                release.set()
+            self.assertEqual(first.result(timeout=1)[0], 503)
+            self.assertEqual(second.result(timeout=1)[0], 503)
+        self.assertEqual(attempts, ['VOD.L'])
+        status, recovered = app.route(self.service, '/quote?symbol=VOD.L')
+        self.assertEqual(status, 200)
+        self.assertEqual(recovered['quote']['rawPrice'], '123.123456789012345678901')
+        recovered['instrument']['name'] = 'changed by caller'
+        recovered['quote']['rawPrice'] = '999'
+        self.assertEqual(self.service.quote('VOD.L')['instrument']['name'], 'Vodafone')
+        self.assertEqual(self.service.quote('VOD.L')['quote']['rawPrice'], '123.123456789012345678901')
+
     def test_upstream_capacity_rejects_requests_without_a_queue(self):
         import threading
         event=threading.Event()

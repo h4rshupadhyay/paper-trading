@@ -5,7 +5,7 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -90,6 +90,7 @@ def instrument(meta, expected):
 class MarketData:
     def __init__(self):
         self.cache = {}
+        self.inflight = {}
         self.lock = threading.Lock()
         self.slots = threading.BoundedSemaphore(2)
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -117,12 +118,28 @@ class MarketData:
             entry = self.cache.get(key)
             if entry and time.monotonic() - entry[0] < 15:
                 return copy.deepcopy(entry[1])
-        result = fetch()
-        with self.lock:
-            if len(self.cache) >= 256:
-                self.cache.clear()
-            self.cache[key] = (time.monotonic(), copy.deepcopy(result))
-        return result
+            pending = self.inflight.get(key)
+            owner = pending is None
+            if owner:
+                pending = Future()
+                self.inflight[key] = pending
+        if not owner:
+            # Waiting callers share work without occupying another upstream slot.
+            return copy.deepcopy(self.wait(pending, 20))
+        try:
+            result = fetch()
+            with self.lock:
+                if len(self.cache) >= 256:
+                    self.cache.clear()
+                self.cache[key] = (time.monotonic(), copy.deepcopy(result))
+            pending.set_result(copy.deepcopy(result))
+            return result
+        except Exception as error:
+            pending.set_exception(error)
+            raise
+        finally:
+            with self.lock:
+                self.inflight.pop(key, None)
 
     def load(self, requested, period='5d', interval='1d'):
         ticker = yf.Ticker(requested)
