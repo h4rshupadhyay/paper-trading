@@ -107,6 +107,29 @@ class IngressTest(unittest.TestCase):
         self.assertEqual(response.returncode, 0, response.stderr)
         self.assertEqual(response.stdout, self.trusted_ip)
 
+    def test_web_recovers_after_api_container_replacement(self):
+        web = self.start('recovery-web', self.image)
+        self.await_web(web)
+        initial_api = self.prefix + '-api'
+        old_ip = json.loads(docker('inspect', initial_api).stdout)[0][
+            'NetworkSettings']['Networks'][self.network]['IPAddress']
+        docker('rm', '-f', initial_api)
+        # Keep the former address occupied so the replacement must get a new one.
+        blocker = self.prefix + '-old-address'
+        self.containers.append(blocker)
+        docker('run', '-d', '--name', blocker, '--network', self.network,
+               '--ip', old_ip, CLIENT_IMAGE, 'sleep', '120')
+        self.start('replacement-api', CLIENT_IMAGE, ['node', '-e',
+            "require('http').createServer((q,s)=>s.end(q.headers['x-forwarded-for']||''))"
+            ".listen(3001,'0.0.0.0')"], alias='api')
+        for _ in range(15):
+            response = self.request(web, self.trusted_ip, '198.51.100.7')
+            if response.returncode == 0:
+                break
+            time.sleep(.5)
+        self.assertEqual(response.returncode, 0, response.stderr)
+        self.assertEqual(response.stdout, self.trusted_ip)
+
     def test_wildcard_or_invalid_trust_fails_before_serving(self):
         for index, cidr in enumerate(('0.0.0.0/0', '0.0.0.0/00', '*',
                                        '256.1.1.1/32', '127.0.0.1/33')):
