@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import re
+import signal
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -12,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 import yfinance as yf
+from streaming import StreamHub
 
 # yfinance 1.7 exposes errors through config; raise_errors is deprecated.
 yf.config.debug.hide_exceptions = False
@@ -90,6 +92,7 @@ def instrument(meta, expected):
 class MarketData:
     def __init__(self):
         self.cache = {}
+        self.stream_currencies = {}
         self.inflight = {}
         self.lock = threading.Lock()
         self.slots = threading.BoundedSemaphore(2)
@@ -155,9 +158,22 @@ class MarketData:
         symbol(requested)
         meta = self.metadata(requested)
         canonical = instrument(meta, requested)
-        return dict(instrument=canonical, quote=dict(rawPrice=decimal(meta.get('regularMarketPrice')),
+        result = dict(instrument=canonical, quote=dict(rawPrice=decimal(meta.get('regularMarketPrice')),
                     rawCurrency=meta['currency'], observedAt=observed(meta.get('regularMarketTime')),
                     session='UNKNOWN', actionKey='yfinance-raw'))
+        with self.lock:
+            entry = self.cache.get(('meta', requested))
+            if entry:
+                self.stream_currencies = {name:value for name,value in self.stream_currencies.items() if time.monotonic()-value[0] < 90}
+                if len(self.stream_currencies) >= 256:
+                    self.stream_currencies.clear()
+                self.stream_currencies[requested] = (entry[0], meta['currency'])
+        return result
+
+    def currency_for_stream(self, requested):
+        with self.lock:
+            entry = self.stream_currencies.get(requested)
+            return entry[1] if entry and time.monotonic()-entry[0] < 90 else None
 
     def history(self, requested, period='3mo', interval='1d'):
         symbol(requested)
@@ -299,12 +315,65 @@ def route(service, target):
 
 class Handler(BaseHTTPRequestHandler):
     service = None
+    hub = None
 
     def setup(self):
         super().setup()
         self.connection.settimeout(20)
 
+    def respond_json(self, status, result):
+        body = json.dumps(result, allow_nan=False, separators=(',', ':')).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        if self.path != '/subscriptions':
+            return self.respond_json(400 if self.path.startswith('/subscriptions?') else 404, {'error': 'Invalid request'})
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 8192 or self.headers.get('Transfer-Encoding') or self.headers.get_content_type() != 'application/json':
+                raise ValueError('Invalid body')
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict) or set(payload) != {'symbols'}:
+                raise ValueError('Invalid body')
+            self.hub.replace(payload['symbols'])
+        except (ValueError, TypeError, UnicodeError):
+            self.close_connection = True
+            return self.respond_json(400, {'error': 'Invalid subscriptions'})
+        return self.respond_json(200, {'ok': True})
+
+    def stream(self):
+        try:
+            client = self.hub.register()
+        except ValueError:
+            return self.respond_json(503, {'error': 'Stream consumer limit reached'})
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Accel-Buffering', 'no')
+            self.end_headers()
+            self.wfile.write(b': heartbeat\n\n')
+            self.wfile.flush()
+            while not client.closed:
+                item = client.get(self.hub.heartbeat_seconds)
+                frame = ('event: quote\ndata: ' + json.dumps(item, allow_nan=False, separators=(',', ':')) + '\n\n').encode() if item else b': heartbeat\n\n'
+                self.wfile.write(frame)
+                self.wfile.flush()
+        except (OSError, ValueError):
+            pass
+        finally:
+            self.hub.unregister(client)
+
     def do_GET(self):
+        if self.path == '/stream':
+            return self.stream()
+        if self.path.startswith('/stream?'):
+            return self.respond_json(400, {'error': 'Invalid parameters'})
         status, result = route(self.service, self.path)
         body = json.dumps(result, allow_nan=False, separators=(',', ':')).encode()
         self.send_response(status)
@@ -322,9 +391,12 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     yf.set_tz_cache_location(os.environ.get('YFINANCE_CACHE_DIR', '/tmp/yfinance-cache'))
     Handler.service = MarketData()
+    Handler.hub = StreamHub(currency_for_symbol=Handler.service.currency_for_stream)
     server = ThreadingHTTPServer((os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8000'))), Handler)
+    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
     try:
         server.serve_forever()
     finally:
+        Handler.hub.stop()
         server.server_close()
         Handler.service.executor.shutdown(wait=False, cancel_futures=True)

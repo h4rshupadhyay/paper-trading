@@ -6,6 +6,7 @@ import Header from '../components/Header'
 import ResourceError from '../components/ResourceError'
 import TickerInput from '../components/TickerInput'
 import { alertsAPI, notificationsReadEvent } from '../services/api'
+import { useActivityRefresh } from '../hooks/useMarketStream'
 import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
@@ -76,6 +77,9 @@ export default function Alerts() {
     window.addEventListener(notificationsReadEvent, read)
     return () => window.removeEventListener(notificationsReadEvent, read)
   }, [])
+  useActivityRefresh(() => Promise.all([
+    fetchAlerts({ background: true }), fetchNotifs(!showAllNotifs, { background: true }),
+  ]))
   useBackgroundRefresh(() => Promise.all([
     fetchAlerts({ background: true }), fetchNotifs(!showAllNotifs, { background: true }),
   ]))

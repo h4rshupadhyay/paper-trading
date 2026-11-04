@@ -1,3 +1,4 @@
+import { marketStreamRoutes } from './stream-http.js';
 import { marketSnapshot, initialStatistics } from './snapshot.js';
 import { Router } from 'express';
 import { AppError } from '../../platform/errors.js';
@@ -8,8 +9,10 @@ import { discoverInstruments, getProvider, readFxRates, readHistory, readInstrum
 function queryKeys(query: object, allowed: string[]) {
   if (Object.keys(query).some(k => !allowed.includes(k))) throw new AppError(400, 'VALIDATION_ERROR', 'Invalid market query');
 }
-export function marketRoutes({ pool }: HttpDependencies): Router {
+export function marketRoutes(deps: HttpDependencies): Router {
+  const { pool } = deps;
   const router = Router();
+  router.use('/market/stream', marketStreamRoutes(deps));
   router.use(['/instruments','/fx-rates'],async (request, _response, next) => { await requireSession(pool, request); next(); });
   router.get('/instruments', async (request, response) => {
     queryKeys(request.query, ['q']);

@@ -13,7 +13,7 @@
 
 ## Docker
 
-Follow the [README](../README.md#getting-started). The private `market-data` service runs yfinance1.7.0 on Python3.12 as a non-root user. It receives no database credentials and publishes no host port. API and worker use `http://market-data:8000` and wait for service health.
+Follow the [README](../README.md#getting-started). The private `market-data` service runs yfinance 1.8.0 on Python 3.12 as a non-root user. It receives no database credentials and publishes no host port. API and worker use `http://market-data:8000` and wait for service health.
 
 The bridge shares a two-request upstream concurrency limit across API and worker, uses short caches and bounded timeouts, and rejects excess requests without queueing them. It does not guarantee fresh receipts for an arbitrarily large active portfolio. External provider failures leave cached observations intact; expired receipts prevent further fills.
 
@@ -33,6 +33,11 @@ The service listens on `127.0.0.1:8000` by default. Configure both Node processe
 Its read-only HTTP contract is `/health`, `/search?q=...`, `/quote?symbol=...`, `/history?symbol=...&period=...&interval=...`, and `/fx?currency=...`. FX direction is INR per unit of the requested currency. Invalid/unavailable data returns an error, with no invented previous-close or FX defaults.
 
 ## Verification
+
+The yfinance worker now consumes a shared WebSocket feed, persists validated quotes
+and pushes them to authenticated browsers. See [quote streaming](PERN_STREAMING.md)
+for the data path, currency checks, limits and HTTP fallback. Historical chart and
+statistics requests retain their independent refresh policies.
 
 Offline service tests, with the virtual environment activated:
 
@@ -74,7 +79,8 @@ Schema migration 005 adds display-only instrument statistics. The authenticated
 `GET /api/instruments/:id/snapshot` endpoint reads a stored quote and an independent
 statistics snapshot. Stored quotes return promptly and refresh in bounded background
 work when older than 15 seconds; a cold quote gets one bounded bootstrap attempt.
-Stock Detail polls every 15 seconds without resetting the selected chart period.
+Stock Detail receives pushed quotes and keeps a 60-second HTTP fallback while ticks
+arrive, returning to 15-second reads during outages without resetting chart controls.
 On the first visit, a separate authenticated `/api/instruments/:id/statistics` read
 joins the pending bounded refresh so statistics appear as soon as it completes,
 without delaying the quote or waiting for the next poll. Stored statistics still

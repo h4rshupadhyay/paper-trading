@@ -1,3 +1,4 @@
+import { useActivityRefresh } from '../hooks/useMarketStream'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Clock, Ban, CheckCircle, Plus, Loader2, X } from 'lucide-react'
 import Header from '../components/Header'
@@ -88,9 +89,9 @@ export default function PendingOrders() {
   }
 
   const requestVersion = useRef(0)
-  const fetchOrders = useCallback(async (status = activeTab) => {
+  const fetchOrders = useCallback(async (status = activeTab, { background = false } = {}) => {
     const version = ++requestVersion.current
-    setLoading(true)
+    if(!background)setLoading(true)
     setLoadError(null)
     try {
       const { data } = await pendingOrdersAPI.list(status)
@@ -100,6 +101,7 @@ export default function PendingOrders() {
     } finally { if (version === requestVersion.current) setLoading(false) }
   }, [activeTab])
 
+  useActivityRefresh(() => fetchOrders(activeTab,{background:true}))
   useEffect(() => { fetchOrders(activeTab); return () => { requestVersion.current++ } }, [activeTab])
 
   const handleCancel = async (order_id) => {

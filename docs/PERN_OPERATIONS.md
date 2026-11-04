@@ -79,7 +79,7 @@ Do not downgrade binaries against a newer schema or modify an applied migration.
 
 Node, Python and nginx base images are pinned to registry manifest digests, as is
 PostgreSQL. npm installs use the existing package lockfiles. The bridge's
-`services/yfinance/requirements.lock.txt` pins all 23 installed runtime distributions
+`services/yfinance/requirements.lock.txt` pins all 22 installed runtime distributions
 and hashes their wheels for **CPython 3.12 on Linux x86_64**. Docker and CI install it
 using `--require-hashes --only-binary=:all:`. Other platforms fail rather than silently
 resolving untested wheels; generate and verify a platform-specific lock before adding

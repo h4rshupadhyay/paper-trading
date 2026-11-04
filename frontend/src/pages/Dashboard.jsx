@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import Header from '../components/Header'
 import { SkeletonCard, SkeletonTable, SkeletonChart } from '../components/LoadingSkeleton'
+import { useActivityRefresh } from '../hooks/useMarketStream'
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { portfolioAPI } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
@@ -89,18 +91,24 @@ export default function Dashboard() {
   const [error, setError]           = useState(null)
   const [historyError, setHistoryError] = useState(null)
 
-  const fetchPortfolio = useCallback(async () => {
-    setLoading(true)
+  const portfolioVersion = useRef(0)
+  const fetchPortfolio = useCallback(async ({ background = false } = {}) => {
+    const version = ++portfolioVersion.current
+    if (!background) setLoading(true)
     try {
       const { data } = await portfolioAPI.get()
+      if (version !== portfolioVersion.current) return
       setPortfolio(data)
       setError(null)
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to load portfolio')
+      if (version === portfolioVersion.current) setError(e.response?.data?.error || 'Failed to load portfolio')
     } finally {
-      setLoading(false)
+      if (version === portfolioVersion.current) setLoading(false)
     }
   }, [])
+
+  useActivityRefresh(() => fetchPortfolio({ background: true }), portfolio?.holdings?.map(item => item.instrumentId) ?? [], true)
+  useBackgroundRefresh(() => fetchPortfolio({ background: true }))
 
   const fetchSnapshots = useCallback(async () => {
     setSnapLoading(true)
