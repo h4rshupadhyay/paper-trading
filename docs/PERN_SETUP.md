@@ -18,13 +18,13 @@ unset MIGRATION_DATABASE_URL
 npm run start:api
 ```
 
-In another shell, load only the runtime URL/origin/secret/provider and run `npm run start:worker`. Run `npm run dev --prefix frontend` for the web UI. API and worker require schema version4. Migrations from foundation1 through5 preserve existing users, opening cash, sessions and folders; newer schema versions are refused. Do not edit an applied migration in a deployed database. Future changes require a new version.
+In another shell, load only the runtime URL/origin/secret/provider and run `npm run start:worker`. Run `npm run dev --prefix frontend` for the web UI. API and worker require schema version 6. Migrations from foundation 1 through 6 preserve existing users, opening cash, sessions and folders; newer schema versions are refused. Do not edit an applied migration in a deployed database. Future changes require a new version.
 
 Sessions last24 hours unless revoked, and survive process restarts. Keep CSRF_SECRET stable across restarts. All unsafe requests require the exact configured Origin; authenticated mutations additionally require `X-CSRF-Token` from `/api/auth/csrf`. There are no bearer tokens in browser localStorage. Decimal input quantities/prices must be strings and unsupported fields fail validation. Every order requires an `Idempotency-Key`; reuse it for a retry of the same intent, and use a new key for a different intent.
 
 ## Deployment
 
-The default `compose.yml` includes `compose.pern.yml`; either entry uses project `paper-pern` and the unchanged `paper-pern_pern_data` persistent volume. Required secrets must be supplied explicitly; missing secrets stop Compose before startup. Neither entry seeds demo data. `compose.legacy.yml` archives the incompatible Oracle/Flask stack and must not be used with the current frontend.
+The default `compose.yml` includes `compose.pern.yml`; either entry uses project `paper-pern` and the unchanged `paper-pern_pern_data` persistent volume. Required secrets must be supplied explicitly; missing secrets stop Compose before startup. Neither entry seeds demo data.
 
 `compose.pern.yml` builds static React assets into nginx and runs compiled Node API/worker images plus a private Python yfinance service. The Python service has no database credentials or published host port. Only the web port is exposed, bound to loopback by default. Terminate public HTTPS with a trusted edge, use `NODE_ENV=production`, set PUBLIC_ORIGIN to that HTTPS origin, and retain persistent storage/backups. Production prohibits fixture selection and execution using persisted fixture instruments.
 
@@ -45,7 +45,7 @@ docker compose --env-file .env.pern-compose.local -f compose.pern.yml exec -T db
   sh -c 'PGPASSWORD="$PAPER_OWNER_PASSWORD" pg_dump -h 127.0.0.1 -U paper_owner -d paper_pern --format=custom' > paper-pern.dump
 ```
 
-Protect dumps as financial/identity data. Store them off-instance with retention, and test restoration to a newly provisioned PostgreSQL database with the owner/runtime roles recreated. A process restart test is not a backup/restore or power-loss guarantee. Do not stop/delete legacy Oracle volumes during this migration. Database volume deletion is an explicit data-destructive operator action and is not a normal reset/setup step.
+Protect dumps as financial/identity data. Store them off-instance with retention, and test restoration to a newly provisioned PostgreSQL database with the owner/runtime roles recreated. A process restart test is not a backup/restore or power-loss guarantee. Database volume deletion is an explicit data-destructive operator action and is not a normal reset/setup step.
 
 ## Resource API
 

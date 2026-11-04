@@ -36,6 +36,10 @@ Earlier changes remain available in Git history.
 
 ### Changed — 2026-11-04
 
+- Removed the retired Flask/Oracle runtime, its SQL and Compose setup, the old
+  frontend development image, obsolete guides/agent permissions and unused
+  frontend hooks. The active PERN deployment, PostgreSQL migrations and
+  in-stack demo upgrade coverage remain.
 - Upgraded the market-data service from **yfinance 1.7.0 to 1.8.0** in both the
   development requirements and hash-locked deployment requirements. Updated the
   wheel SHA-256 and removed the no-longer-required `multitasking` dependency;

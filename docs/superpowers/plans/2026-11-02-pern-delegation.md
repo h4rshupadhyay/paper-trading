@@ -4,7 +4,10 @@ Completion update,3 November2026: M2–M7 implementation is locally merged into 
 
 Status: foundation implemented and task-reviewed, 2 November 2026. The user authorized execution with “let’s start”, preserving LUNA for bounded work and SOL for reasoning/integration/review. Primary checks passed 112 tests, typecheck and build; final branch review is pending. Later milestones remain planned.
 
-References: [proposed design](../specs/2026-11-02-paper-trading-pern-design.md), [foundation plan](2026-11-02-pern-foundation.md), [glossary](../../../GLOSSARY.md), [historical migration audit](../../PERN_MIGRATION_AUDIT.md).
+References: [proposed design](../specs/2026-11-02-paper-trading-pern-design.md), [foundation plan](2026-11-02-pern-foundation.md), [glossary](../../../GLOSSARY.md), [historical migration audit in Git history](https://github.com/h4rshupadhyay/paper-trading/blob/b5729b7/docs/PERN_MIGRATION_AUDIT.md).
+
+The pre-migration source inventories named below were retired with the old
+runtime. They remain available in the [pre-cleanup Git tree](https://github.com/h4rshupadhyay/paper-trading/tree/b5729b7/docs/superpowers/plans/preparation).
 
 ## Models and decision ownership
 

@@ -180,4 +180,4 @@ docs/                      Setup, operations, and design documentation
 - [Provider alternatives](docs/PERN_PROVIDER_RESEARCH.md) — official-source coverage, delays, and evidence still needed for trading.
 - [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.
 
-The earlier Flask/Oracle application remains in `backend/`, `database/`, and `compose.legacy.yml` for reference. See the [legacy README](docs/LEGACY_README.md) for that version; the current app uses the default `compose.yml` or explicit `compose.pern.yml`. The archived stack is incompatible with the current frontend and must not be used to start this app.
+The repository contains only the current PERN application and its private yfinance service. The default `compose.yml` and explicit `compose.pern.yml` start the same stack. Earlier Flask/Oracle sources remain available in Git history.

@@ -1,6 +1,6 @@
 # PERN foundation setup
 
-This slice provides registration, login, revocable sessions and an owned INR account. Registration atomically creates the user, account, opening cash movement and `Default` folder. Opening cash is INR 1,000,000, returned as the string `"1000000.00"`, with sequence `"1"`. The legacy React/Python/Oracle application and its Compose files are separate and unchanged. There is no trading engine, worker, frontend cutover or seed command in this slice.
+This is the historical foundation acceptance record. For current startup and operations use the [README](../README.md) and [PERN setup](PERN_SETUP.md). The foundation slice provides registration, login, revocable sessions and an owned INR account. Registration atomically creates the user, account, opening cash movement and `Default` folder. Opening cash is INR 1,000,000, returned as the string `"1000000.00"`, with sequence `"1"`.
 
 ## Reproduce the acceptance checks
 
@@ -28,11 +28,11 @@ When verification no longer needs the isolated database:
 npm run test:db:down
 ```
 
-This stops only the named foundation test project. Its tmpfs data is disposable. Do not use legacy Compose cleanup, volume deletion or global prune commands. Interrupting a test with SIGKILL may bypass its database cleanup; stopping this isolated project discards only its test data.
+This stops only the named foundation test project. Its tmpfs data is disposable. Do not delete application volumes or use global prune commands. Interrupting a test with SIGKILL may bypass its database cleanup; stopping this isolated project discards only its test data.
 
 ## Configure a separate persistent development database
 
-For manual API use, provision a new PostgreSQL database on a separate development instance with persistent storage. Do not use an existing Oracle database, its volumes, or the disposable tmpfs instance for data you want to retain. The migration expects the exact role names below; it grants runtime privileges to `paper_app`.
+For manual API use, provision a new PostgreSQL database on a separate development instance with persistent storage. Do not use the disposable tmpfs instance for data you want to retain. The migration expects the exact role names below; it grants runtime privileges to `paper_app`.
 
 As the administrator of that **new development instance**, use `psql` to create separate logins, set unique generated passwords interactively, then create a new owned database:
 

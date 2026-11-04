@@ -2,6 +2,9 @@
 
 For the subsequent feature-by-feature interaction inventory and seeded logic/browser testing, see the [interaction matrix](testing/INTERACTION_FAILURE_MATRIX.md) and [execution results](testing/RESULTS_2026-11-04.md). The findings below retain their original review context.
 
+The pre-PERN files cited in finding 7 were removed after cutover. Their exact
+contents remain available in the [pre-cleanup Git tree](https://github.com/h4rshupadhyay/paper-trading/tree/b5729b7).
+
 **Current status:** the [re-audit fixes](CODEBASE_REAUDIT_2026-11-04.md#implementation-results) are implemented and deployed locally with schema 005. Restart policies, locked deployment inputs and an isolated backup/restore drill are complete; see the [deployment record](PERN_OPERATIONS.md#verified-deployment--4-november-2026). Findings below retain the historical baseline.
 
 **Implementation status:** the nine approved fixes are complete on `fix/audit-tdd`, each with a separate task commit and an observed failing regression before implementation. The findings below describe the reviewed baseline; see [implementation results](#implementation-results) for current status. The lower-priority restart-policy finding and cleanup suggestions remain follow-up work.
@@ -72,7 +75,9 @@ Watchlist SQL classifies by source observation age and regular-session status. A
 
 ### 7. Medium: default startup still points at the legacy application
 
-**Evidence:** [archived Compose:33](../compose.legacy.yml#L33), [archived Compose:62](../compose.legacy.yml#L62), [MANUAL_SETUP.md](../MANUAL_SETUP.md), [frontend/Dockerfile:1](../frontend/Dockerfile#L1), [backend/entrypoint.sh:5](../backend/entrypoint.sh#L5).
+**Historical evidence:** `compose.legacy.yml`, `MANUAL_SETUP.md`,
+`frontend/Dockerfile` and `backend/entrypoint.sh` in the
+[pre-cleanup Git tree](https://github.com/h4rshupadhyay/paper-trading/tree/b5729b7).
 
 The README correctly specifies `compose.pern.yml`, but plain `docker compose up` still selects Oracle/Flask with the current PERN frontend. The legacy frontend image also uses Node20 while the active toolchain requires Node24. The old backend entrypoint runs demo seeding. Old manual instructions remain easy to mistake for current setup.
 
