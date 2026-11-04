@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Star, Trash2, TrendingUp, TrendingDown,
@@ -40,11 +40,17 @@ export default function Watchlist() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
-  const fetchWatchlist = useCallback(async () => {
-    setLoading(true)
+  const listRequest = useRef(0)
+  const listRevision = useRef(0)
+  const fetchWatchlist = useCallback(async ({ background = false } = {}) => {
+    const version = ++listRequest.current
+    const revision = listRevision.current
+    if (!background) setLoading(true)
     setError(null)
     try {
       const { data } = await watchlistAPI.get()
+      if (version !== listRequest.current) return
+      if (revision !== listRevision.current) { void fetchWatchlist({ background: true }); return }
       setItems(data.watchlist || [])
       const newFolders = data.folders || []
       setFolders(newFolders)
@@ -54,13 +60,13 @@ export default function Watchlist() {
         return newFolders.find((f) => f.folder_id === prev) ? prev : null
       })
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to load watchlist')
+      if (version === listRequest.current) setError(e.response?.data?.error || 'Failed to load watchlist')
     } finally {
-      setLoading(false)
+      if (version === listRequest.current) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchWatchlist() }, [fetchWatchlist])
+  useEffect(() => { fetchWatchlist(); return () => { listRequest.current++ } }, [fetchWatchlist])
 
   useEffect(() => { setAddToFolderId(activeTab) }, [activeTab])
 
@@ -69,6 +75,8 @@ export default function Watchlist() {
     setRemoving(watchlist_id)
     try {
       await watchlistAPI.removeItem(watchlist_id)
+      listRevision.current++
+      setLoading(false)
       setItems((prev) => prev.filter((i) => i.watchlist_id !== watchlist_id))
     } catch (err) {
       setActionError(err.response?.data?.error || 'Failed to remove entry. Try again.')
@@ -82,9 +90,11 @@ export default function Watchlist() {
     setAdding(true)
     setAddError(null)
     try {
-      await watchlistAPI.add(t, addToFolderId)
+      const { data } = await watchlistAPI.add(t, addToFolderId)
+      listRevision.current++
+      setLoading(false)
+      setItems((prev) => [...prev.filter((item) => item.watchlist_id !== data.watchlist_id), data])
       setAddTicker('')
-      await fetchWatchlist()
     } catch (err) {
       setAddError(err.response?.data?.error || `Failed to add ${t}`)
     } finally {
@@ -112,10 +122,12 @@ export default function Watchlist() {
     setCreatingFolder(true)
     try {
       const { data } = await watchlistAPI.createFolder(name)
+      listRevision.current++
+      setLoading(false)
       setShowNewTab(false)
       setNewTabName('')
-      await fetchWatchlist()
-      setActiveTab(data.folder_id)   // jump to the new tab
+      setFolders((prev) => [...prev.filter((folder) => folder.folder_id !== data.folder_id), data])
+      setActiveTab(data.folder_id)
       showToast(`List "${name}" created`)
     } catch (err) {
       setFolderError(err.response?.data?.error || 'Failed to create list. Try again.')
@@ -130,9 +142,11 @@ export default function Watchlist() {
     setActionError(null)
     setRenamingFolder(true)
     try {
-      await watchlistAPI.renameFolder(folder_id, name)
+      const { data } = await watchlistAPI.renameFolder(folder_id, name)
+      listRevision.current++
+      setLoading(false)
       setRenamingTab(null)
-      await fetchWatchlist()
+      setFolders((prev) => prev.map((folder) => folder.folder_id === folder_id ? { ...folder, name: data.folder.name } : folder))
     } catch (err) {
       setActionError(err.response?.data?.error || 'Failed to rename list. Try again.')
     } finally { setRenamingFolder(false) }
@@ -143,6 +157,7 @@ export default function Watchlist() {
     if (!window.confirm(`Delete list "${name}"? Items will become Uncategorised.`)) return
     try {
       await watchlistAPI.deleteFolder(folder_id)
+      listRevision.current++
       if (activeTab === folder_id) setActiveTab(null)
       showToast('List deleted')
       await fetchWatchlist()

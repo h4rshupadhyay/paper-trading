@@ -19,12 +19,14 @@ DUMMY_ENV = {
 }
 
 
-def render(*args, secrets=True):
+def render(*args, secrets=True, missing=None):
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(('COMPOSE_', 'PAPER_', 'PERN_', 'MARKET_', 'TRUSTED_INGRESS_'))
            and k not in ('PUBLIC_ORIGIN', 'CSRF_SECRET', 'NODE_ENV')}
     if secrets:
         env.update(DUMMY_ENV)
+    if missing:
+        env.pop(missing, None)
     return subprocess.run(['docker', 'compose', '--env-file', '/dev/null', *args,
                            'config', '--format', 'json'], cwd=ROOT, env=env,
                           capture_output=True, text=True)
@@ -54,7 +56,13 @@ class ComposeEntryTest(unittest.TestCase):
             with self.subTest(entry=entry):
                 result = render(*entry, secrets=False)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn('Set PAPER_', result.stderr)
+                # Compose can visit interpolation nodes in a different order.
+                self.assertRegex(result.stderr, r'Set (PAPER_\w+|PUBLIC_ORIGIN|CSRF_SECRET)')
+            for name in DUMMY_ENV:
+                with self.subTest(entry=entry, missing=name):
+                    result = render(*entry, missing=name)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('Set ' + name, result.stderr)
 
 
 if __name__ == '__main__':

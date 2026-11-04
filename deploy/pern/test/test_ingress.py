@@ -37,6 +37,11 @@ class IngressTest(unittest.TestCase):
         docker('network', 'create', cls.network)
         info = json.loads(docker('network', 'inspect', cls.network).stdout)[0]
         subnet = ipaddress.ip_network(info['IPAM']['Config'][0]['Subnet'])
+        # Docker 28 rejects static client IPs on automatically allocated subnets.
+        # Let IPAM choose an unused range, then explicitly configure that range.
+        # No containers have joined this uniquely named test network yet.
+        docker('network', 'rm', cls.network)
+        docker('network', 'create', '--subnet', str(subnet), cls.network)
         cls.trusted_ip = str(subnet.network_address + 10)
         cls.untrusted_ip = str(subnet.network_address + 11)
         cls.start('api', CLIENT_IMAGE, ['node', '-e',
@@ -77,7 +82,10 @@ class IngressTest(unittest.TestCase):
             if result.returncode == 0:
                 return
             time.sleep(.25)
-        self.fail('nginx never became ready: ' + docker('logs', web, check=False).stderr)
+        logs = docker('logs', web, check=False)
+        self.fail('nginx never became ready. Last client exit=' + str(result.returncode)
+                  + '\nclient stderr: ' + result.stderr + '\nclient stdout: ' + result.stdout
+                  + '\nnginx stderr: ' + logs.stderr + '\nnginx stdout: ' + logs.stdout)
 
     def test_only_explicit_trusted_ingress_can_preserve_forwarded_clients(self):
         web = self.start('trusted-web', self.image,

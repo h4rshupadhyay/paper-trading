@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Sun, Moon, Bell, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, REGIONS, tickerCurrency } from '../context/RegionContext'
 import StockSearch from './StockSearch'
 import ResourceError from './ResourceError'
-import { alertsAPI, stocksAPI } from '../services/api'
+import { alertsAPI, stocksAPI, notificationsReadEvent } from '../services/api'
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { convertDisplayCurrency } from '../services/contracts'
 
 /* ── Notification bell ─────────────────────────────────────────── */
@@ -16,22 +17,29 @@ function NotificationBell() {
   const [actionError, setActionError] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const dropdownRef           = useRef(null)
+  const unreadVersion = useRef(0)
 
-  const fetchUnread = async () => {
+  const fetchUnread = useCallback(async () => {
+    const version = ++unreadVersion.current
     setLoadError(null)
     try {
       const { data } = await alertsAPI.notifications(true)
-      setNotifs(data)
+      if (version === unreadVersion.current) setNotifs(data)
     } catch (err) {
-      setLoadError(err.response?.data?.error || 'Failed to load notifications')
+      if (version === unreadVersion.current) setLoadError(err.response?.data?.error || 'Failed to load notifications')
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchUnread()
-    const interval = setInterval(fetchUnread, 30_000)
-    return () => clearInterval(interval)
-  }, [])
+    const read = ({ detail: ids }) => {
+      unreadVersion.current++
+      setNotifs((prev) => prev.filter((n) => !ids.includes(n.notif_id)))
+    }
+    window.addEventListener(notificationsReadEvent, read)
+    return () => { unreadVersion.current++; window.removeEventListener(notificationsReadEvent, read) }
+  }, [fetchUnread])
+  useBackgroundRefresh(fetchUnread)
 
   useEffect(() => {
     if (!open) return
@@ -51,7 +59,6 @@ function NotificationBell() {
     setMarking(true)
     try {
       await alertsAPI.markRead(ids)
-      setNotifs([])
     } catch (err) {
       setActionError(err.response?.data?.error || 'Failed to mark notifications read. Try again.')
     } finally { setMarking(false) }

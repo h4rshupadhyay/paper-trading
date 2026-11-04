@@ -1,9 +1,10 @@
 import axios from 'axios'
-import { rememberInstrument, instrumentForSymbol, displayNumber, orderIntent, adaptPortfolio, adaptOrder } from './contracts.js'
+import { rememberInstrument, instrumentForSymbol, displayNumber, orderIntent, adaptPortfolio, adaptOrder, orderRejectionMessage } from './contracts.js'
 
 const api=axios.create({baseURL:'/api',withCredentials:true,headers:{'Content-Type':'application/json'}})
 let csrfPromise
 export const resetCsrf=()=>{csrfPromise=undefined}
+export const notificationsReadEvent='paper:notifications-read'
 api.interceptors.request.use(async config=>{
   if (!['get','head','options'].includes(config.method??'get') && !['/auth/register','/auth/login'].includes(config.url)) {
     csrfPromise??=api.get('/auth/csrf').then(({data})=>data.csrfToken).catch(error=>{resetCsrf();throw error})
@@ -91,7 +92,7 @@ export const currencyAPI={rates:()=>api.get('/fx-rates')}
 export async function placeOrder(symbol,input,key) {
   const item=await instrument(symbol)
   const response=await api.post('/orders',orderIntent(item.id,input),{headers:{'Idempotency-Key':key}})
-  if(response.data.order.status==='REJECTED') throw new Error(response.data.order.rejectionReason||'Order rejected')
+  if(response.data.order.status==='REJECTED') throw new Error(orderRejectionMessage(response.data.order.rejectionReason))
   return response
 }
 const orderCursors=new Map([[1,undefined]])
@@ -111,7 +112,8 @@ export const portfolioAPI={get:()=>mapped(api.get('/portfolio'),adaptPortfolio),
 export const watchlistAPI={
   get:()=>mapped(api.get('/watchlists'),data=>{const defaultId=data.folders.find(f=>f.isDefault)?.id;return{
     folders:data.folders.filter(f=>!f.isDefault).map(f=>({...f,folder_id:f.id})),watchlist:data.items.map(item=>entry(item,defaultId))}}),
-  add:async(symbol,folderId)=>api.post('/watchlists/entries',{instrumentId:(await instrument(symbol)).id,...(folderId?{folderId}:{})}),
+  add:async(symbol,folderId)=>mapped(api.post('/watchlists/entries',{instrumentId:(await instrument(symbol)).id,...(folderId?{folderId}:{})}),
+    data=>entry(data.entry,folderId?null:data.entry.folderId)),
   remove:async symbol=>{const {data}=await watchlistAPI.get();await Promise.all(data.watchlist.filter(item=>item.ticker===symbol).map(item=>watchlistAPI.removeItem(item.watchlist_id)))},
   removeItem:id=>api.delete(`/watchlists/entries/${id}`),
   createFolder:name=>mapped(api.post('/watchlists/folders',{name}),data=>({...data.folder,folder_id:data.folder.id})),
@@ -143,6 +145,8 @@ export const alertsAPI={
     for(let offset=0;offset<ids.length;offset+=100){
       response=await api.post('/notifications/read',{ids:ids.slice(offset,offset+100)})
       items.push(...response.data.items)
+      // Publish only committed batches, including when a later batch fails.
+      if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent(notificationsReadEvent,{detail:response.data.items.map(item=>item.id)}))
     }
     return {...response,data:{items}}
   },

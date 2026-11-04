@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Bell, BellOff, Trash2, Plus, Loader2, CheckCheck,
 } from 'lucide-react'
 import Header from '../components/Header'
 import ResourceError from '../components/ResourceError'
 import TickerInput from '../components/TickerInput'
-import { alertsAPI } from '../services/api'
+import { alertsAPI, notificationsReadEvent } from '../services/api'
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
 export default function Alerts() {
@@ -37,39 +38,47 @@ export default function Alerts() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  const fetchAlerts = useCallback(async () => {
-    setLoadingAlerts(true)
+  const alertsVersion = useRef(0)
+  const notifsVersion = useRef(0)
+  const fetchAlerts = useCallback(async ({ background = false } = {}) => {
+    const version = ++alertsVersion.current
+    if (!background) setLoadingAlerts(true)
     setAlertsError(null)
     try {
       const { data } = await alertsAPI.list()
-      setAlerts(data)
+      if (version === alertsVersion.current) setAlerts(data)
     } catch (err) {
-      setAlertsError(err.response?.data?.error || 'Failed to load alerts')
-    } finally { setLoadingAlerts(false) }
+      if (version === alertsVersion.current) setAlertsError(err.response?.data?.error || 'Failed to load alerts')
+    } finally { if (version === alertsVersion.current) setLoadingAlerts(false) }
   }, [])
 
-  const fetchNotifs = useCallback(async (unreadOnly = !showAllNotifs) => {
-    setLoadingNotifs(true)
+  const fetchNotifs = useCallback(async (unreadOnly = !showAllNotifs, { background = false } = {}) => {
+    const version = ++notifsVersion.current
+    if (!background) setLoadingNotifs(true)
     setNotifsError(null)
     try {
       const { data } = await alertsAPI.notifications(unreadOnly)
-      setNotifs(data)
+      if (version === notifsVersion.current) setNotifs(data)
     } catch (err) {
-      setNotifsError(err.response?.data?.error || 'Failed to load notifications')
-    } finally { setLoadingNotifs(false) }
+      if (version === notifsVersion.current) setNotifsError(err.response?.data?.error || 'Failed to load notifications')
+    } finally { if (version === notifsVersion.current) setLoadingNotifs(false) }
   }, [showAllNotifs])
 
-  useEffect(() => { fetchAlerts() }, [fetchAlerts])
-  useEffect(() => { fetchNotifs() }, [fetchNotifs])
+  useEffect(() => { fetchAlerts(); return () => { alertsVersion.current++ } }, [fetchAlerts])
+  useEffect(() => { fetchNotifs(); return () => { notifsVersion.current++ } }, [fetchNotifs])
 
-  // Poll every 15 s so triggered alerts and new notifications appear automatically
   useEffect(() => {
-    const id = setInterval(() => {
-      fetchAlerts()
-      fetchNotifs()
-    }, 15_000)
-    return () => clearInterval(id)
-  }, [fetchAlerts, fetchNotifs])
+    const read = ({ detail: ids }) => {
+      notifsVersion.current++
+      setLoadingNotifs(false)
+      setNotifs((prev) => prev.map((n) => ids.includes(n.notif_id) ? { ...n, is_read: true } : n))
+    }
+    window.addEventListener(notificationsReadEvent, read)
+    return () => window.removeEventListener(notificationsReadEvent, read)
+  }, [])
+  useBackgroundRefresh(() => Promise.all([
+    fetchAlerts({ background: true }), fetchNotifs(!showAllNotifs, { background: true }),
+  ]))
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -82,6 +91,8 @@ export default function Alerts() {
     setCreating(true)
     try {
       const { data } = await alertsAPI.create(ticker.trim().toUpperCase(), condition, price)
+      alertsVersion.current++
+      setLoadingAlerts(false)
       setAlerts((prev) => [data, ...prev])
       setTicker('')
       setTargetPrice('')
@@ -98,6 +109,8 @@ export default function Alerts() {
     setDeleting(alert_id)
     try {
       await alertsAPI.delete(alert_id)
+      alertsVersion.current++
+      setLoadingAlerts(false)
       setAlerts((prev) => prev.filter((a) => a.alert_id !== alert_id))
       showToast('Alert deleted')
     } catch (err) {
@@ -110,9 +123,6 @@ export default function Alerts() {
     setMarking(true)
     try {
       await alertsAPI.markRead(ids)
-      setNotifs((prev) =>
-        prev.map((n) => ids.includes(n.notif_id) ? { ...n, is_read: true } : n),
-      )
     } catch (err) {
       setActionError(err.response?.data?.error || 'Failed to mark notifications read. Try again.')
     } finally { setMarking(false) }

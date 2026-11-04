@@ -57,6 +57,18 @@ export function adaptPortfolio(data) {
     holdings_value:displayNumber(data.holdingsValue),total_pl:pl,total_invested:invested,
     total_pl_pct:pl!=null && invested ? pl/invested*100 : null}
 }
+export function orderRejectionMessage(reason) {
+  switch (reason) {
+    case 'INSUFFICIENT_FUNDS': return "You don't have enough cash for this order."
+    case 'INSUFFICIENT_POSITION': return "You don't have enough shares to sell."
+    case 'ACCOUNT_DISABLED': return 'Trading is unavailable for this account.'
+    case 'SETTLEMENT_ZERO':
+    case 'NATIVE_AMOUNT_ZERO': return 'Order value is too small. Increase the quantity.'
+    case 'NUMERIC_OVERFLOW': return 'Order value is too large. Reduce the quantity.'
+    default: return 'Order could not be placed.'
+  }
+}
+
 export function adaptOrder(order) {
   rememberInstrument({id:order.instrumentId,symbol:order.symbol,currency:order.currency})
   return {...order,order_id:order.id,transaction_id:order.id,ticker:order.symbol,company_name:order.symbol,
@@ -64,5 +76,5 @@ export function adaptOrder(order) {
     limit_price:displayNumber(order.limitPrice),stop_price:displayNumber(order.stopPrice),
     filled_price:displayNumber(order.executionPrice??order.price),price:displayNumber(order.executionPrice??order.price),
     total_amount:displayNumber(order.baseSettlement),created_at:order.createdAt,time:order.completedAt??order.createdAt,executed_at:order.executedAt,
-    expires_at:order.expiresAt,filled_at:order.completedAt,rejection_reason:order.rejectionReason}
+    expires_at:order.expiresAt,filled_at:order.completedAt,rejection_reason:order.rejectionReason?orderRejectionMessage(order.rejectionReason):null}
 }

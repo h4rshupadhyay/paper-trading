@@ -125,7 +125,11 @@ With the market-data virtual environment activated, run `npm run test:market` fo
 
 With Docker running, `npm run test:deploy` checks Compose entry points and trusted-ingress behavior using temporary containers and dummy secrets. It does not use the app database or volumes.
 
+The [interaction and failure matrix](docs/testing/INTERACTION_FAILURE_MATRIX.md) maps each feature, endpoint, financial rule and failure path to its tests. See the [4 November test results](docs/testing/RESULTS_2026-11-04.md) for executed checks, seeded fixtures, discovered defects and remaining coverage limits. `npm run test:browser:interactions` runs the new form/control journeys; they also run in `npm run test:e2e`. Seeded accounting and HTTP guard tests run automatically in `npm run test:foundation`.
+
 Browser tests use an installed Google Chrome. Set `CHROME_EXECUTABLE` if it is installed somewhere other than the default path.
+
+Internal changes render from confirmed write responses. Alerts and notifications use a one-minute background check while the tab is visible, refresh on return, and synchronise notification reads immediately. Other internal lists load on navigation/actions. See the [refresh policy and regressions](docs/testing/INTERNAL_API_REFRESH_2026-11-04.md).
 
 The [GitHub Actions workflow](.github/workflows/ci.yml) runs these checks on pull requests, pushes to `main`, and manual dispatch. It uses the repository’s Node/npm versions, Python 3.12.16, lockfile installs for both npm projects, and package-matched Playwright Chromium. It also runs the offline Python and Docker deployment tests. Test PostgreSQL is isolated and cleaned up after the checks; application secrets and live market-data access are unnecessary. See the [CI verification record](docs/superpowers/plans/2026-11-04-ci.md) for validation and hosted-run limitations.
 

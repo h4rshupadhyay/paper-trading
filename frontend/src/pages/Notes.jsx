@@ -18,6 +18,8 @@ export default function Notes() {
   const [loadError, setLoadError] = useState(null)
   const [editorError, setEditorError] = useState(null)
   const editorRequest = useRef(0)
+  const listRequest = useRef(0)
+  const listRevision = useRef(0)
   useEffect(() => () => { editorRequest.current += 1 }, [])
 
   // editor fields
@@ -30,18 +32,24 @@ export default function Notes() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  const fetchList = useCallback(async () => {
-    setLoading(true)
+  const fetchList = useCallback(async ({ background = false } = {}) => {
+    const version = ++listRequest.current
+    const revision = listRevision.current
+    if (!background) setLoading(true)
     setLoadError(null)
     try {
       const { data } = await notesAPI.list()
+      if (version !== listRequest.current) return
+      // A read begun before a committed write cannot replace the local result.
+      // Reconcile the rest of the list without delaying that write's display.
+      if (revision !== listRevision.current) { void fetchList({ background: true }); return }
       setNotes(data)
     } catch (err) {
-      setLoadError(err.response?.data?.error || 'Failed to load notes')
-    } finally { setLoading(false) }
+      if (version === listRequest.current) setLoadError(err.response?.data?.error || 'Failed to load notes')
+    } finally { if (version === listRequest.current) setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchList() }, [fetchList])
+  useEffect(() => { fetchList(); return () => { listRequest.current++ } }, [fetchList])
 
   const openNote = async (stub) => {
     const request = ++editorRequest.current
@@ -79,14 +87,18 @@ export default function Notes() {
         const { data } = await notesAPI.create(
           title.trim(), body, ticker.trim().toUpperCase() || undefined,
         )
+        listRevision.current++
+        setLoading(false)
         if (request === editorRequest.current) {
           setSelected(data)
           setIsNew(false)
         }
-        await fetchList()
+        setNotes((prev) => [data, ...prev.filter((n) => n.note_id !== data.note_id)])
         showToast('Note created')
       } else {
         const { data } = await notesAPI.update(selected.note_id, title.trim(), body)
+        listRevision.current++
+        setLoading(false)
         if (request === editorRequest.current) setSelected(data)
         setNotes((prev) =>
           prev.map((n) =>
@@ -110,6 +122,8 @@ export default function Notes() {
     setDeleting(true)
     try {
       await notesAPI.delete(selected.note_id)
+      listRevision.current++
+      setLoading(false)
       setNotes((prev) => prev.filter((n) => n.note_id !== selected.note_id))
       if (request === editorRequest.current) {
         setSelected(null)

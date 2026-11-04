@@ -1,5 +1,7 @@
 # Codebase audit — 4 November 2026
 
+For the subsequent feature-by-feature interaction inventory and seeded logic/browser testing, see the [interaction matrix](testing/INTERACTION_FAILURE_MATRIX.md) and [execution results](testing/RESULTS_2026-11-04.md). The findings below retain their original review context.
+
 **Current status:** the [re-audit fixes](CODEBASE_REAUDIT_2026-11-04.md#implementation-results) are implemented and deployed locally with schema 005. Restart policies, locked deployment inputs and an isolated backup/restore drill are complete; see the [deployment record](PERN_OPERATIONS.md#verified-deployment--4-november-2026). Findings below retain the historical baseline.
 
 **Implementation status:** the nine approved fixes are complete on `fix/audit-tdd`, each with a separate task commit and an observed failing regression before implementation. The findings below describe the reviewed baseline; see [implementation results](#implementation-results) for current status. The lower-priority restart-policy finding and cleanup suggestions remain follow-up work.
