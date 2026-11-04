@@ -20,6 +20,8 @@ The [internal API refresh follow-up](INTERNAL_API_REFRESH_2026-11-04.md) extends
 
 A mistyped `AUDIT_CASE` filter that matches no scenarios exits nonzero; a zero-case run is not a successful check.
 
+UI-035 subsequently extends the suite to 26 scenarios: seed the demo with real restricted-role services, sign in through the normal login form, and verify three dashboard holdings, cash/reconciliation, two notes, three pending orders and three watchlist entries. See [demo-user verification](DEMO_USER_2026-11-04.md).
+
 | Case | Surface and actions | Data and assertions |
 | --- | --- | --- |
 | UI-001 | Empty watchlist; New list; disabled empty Create; type name; Cancel; reopen and Create; double-click rename; Enter save | Cancel leaves no folder; real folder creation and rename persist |

@@ -140,20 +140,22 @@ try {
   });
 
   await scenario('analytics period response race',async ({page})=>{
-    const held=gate(),requested=gate();
-    await page.route('**/api/portfolio/snapshots?*',async route=>{
-      const days=new URL(route.request().url()).searchParams.get('days');
-      if(days==='30'){requested.release();await held.promise;}
-      const values=days==='30'?['150','100']:['220','200'];
-      await route.fulfill({json:{items:values.map((v,i)=>({id:String(i),sampledAt:`2026-11-0${2-i}T00:00:00Z`,totalValue:v,cashBalance:v,holdingsValue:'0'})),nextCursor:null}});
+    const held=gate();
+    // A bounded request wait makes an endpoint mismatch fail instead of hanging.
+    const requested=page.waitForRequest('**/api/portfolio/history?period=5y',{timeout:8000});
+    await page.route('**/api/portfolio/history?*',async route=>{
+      const period=new URL(route.request().url()).searchParams.get('period');
+      if(period==='5y')await held.promise;
+      const values=period==='5y'?['100','150']:['200','220'];
+      await route.fulfill({json:{period,firstValue:values[0],lastValue:values[1],items:values.map((v,i)=>({id:String(i),sampledAt:`2026-11-0${1+i}T00:00:00Z`,totalValue:v,cashBalance:v,holdingsValue:'0'}))}});
     });
     try {
-      await page.goto(origin+'/analytics');await requested.promise;
-      await page.getByRole('button',{name:'7D',exact:true}).click();
+      await page.goto(origin+'/analytics');await requested;
+      await page.getByRole('button',{name:'1M',exact:true}).click();
       await expect(page.locator('.chart-section .card-sub')).toContainText('+10.00%');
-      const finished=page.waitForEvent('requestfinished',r=>r.url().includes('/portfolio/snapshots?')&&new URL(r.url()).searchParams.get('days')==='30');
+      const finished=page.waitForEvent('requestfinished',r=>r.url().includes('/portfolio/history?')&&new URL(r.url()).searchParams.get('period')==='5y');
       held.release();await finished;await renderSettled(page);
-      await expect(page.locator('.period-btn.active')).toHaveText('7D');
+      await expect(page.locator('.period-btn.active')).toHaveText('1M');
       await expect(page.locator('.chart-section .card-sub')).toContainText('+10.00%');
     } finally {held.release();}
   });
@@ -236,12 +238,12 @@ try {
     await page.goto(origin+'/dashboard');await expect(page.locator('main')).toContainText('Some holdings are under review');
   });
   await scenario('dashboard history failure does not hide account and retries clear errors',async ({page})=>{
-    await page.route('**/api/portfolio/snapshots?*',route=>route.fulfill({status:503,json:{error:{message:'History unavailable'}}}));
+    await page.route('**/api/portfolio/history?*',route=>route.fulfill({status:503,json:{error:{message:'History unavailable'}}}));
     await page.goto(origin+'/dashboard');
     await expect(page.locator('.stat-card').filter({hasText:'Cash Available'})).toBeVisible();
     await expect(page.locator('main')).toContainText('History unavailable');
-    await page.unroute('**/api/portfolio/snapshots?*');
-    await page.getByRole('button',{name:'Refresh',exact:true}).first().click();
+    await page.unroute('**/api/portfolio/history?*');
+    await page.getByRole('button',{name:'Refresh portfolio history'}).click();
     await expect(page.locator('main')).not.toContainText('History unavailable');
     let failed=false;
     await page.route('**/api/portfolio',route=>{if(!failed){failed=true;return route.fulfill({status:503,json:{error:{message:'Portfolio unavailable'}}})}return route.continue()});

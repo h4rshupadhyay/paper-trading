@@ -53,16 +53,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Install matching Chromium and system libraries
+        run: |
+          ./node_modules/.bin/playwright install --with-deps chromium
+          node --input-type=module -e "import { chromium } from '@playwright/test'; console.log('CHROME_EXECUTABLE=' + chromium.executablePath())" >> "$GITHUB_ENV"
+
       - name: Frontend tests
         run: npm run test:web
 
       - name: Offline market-service tests
         run: npm run test:market
-
-      - name: Install matching Chromium and system libraries
-        run: |
-          ./node_modules/.bin/playwright install --with-deps chromium
-          node --input-type=module -e "import { chromium } from '@playwright/test'; console.log('CHROME_EXECUTABLE=' + chromium.executablePath())" >> "$GITHUB_ENV"
 
       - name: Start isolated test PostgreSQL
         id: database

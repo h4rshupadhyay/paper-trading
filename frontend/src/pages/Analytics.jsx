@@ -12,6 +12,7 @@ import {
 import Header from '../components/Header'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 import { portfolioAPI } from '../services/api'
+import { PORTFOLIO_PERIODS, portfolioTick, portfolioTooltipDate } from '../services/portfolioHistory'
 
 // ── Palette for pie slices ──────────────────────────────────────
 const COLORS = [
@@ -21,13 +22,7 @@ const COLORS = [
 ]
 
 // ── Helpers ─────────────────────────────────────────────────────
-const PERIOD_OPTIONS = [
-  { label: '7D',  days: 7  },
-  { label: '1M',  days: 30 },
-  { label: '3M',  days: 90 },
-  { label: '6M',  days: 180 },
-  { label: '1Y',  days: 365 },
-]
+
 
 function pct(n) {
   return `${n >= 0 ? '+' : ''}${Number(n).toFixed(2)}%`
@@ -58,7 +53,7 @@ function AreaTooltip({ active, payload, label, formatCurrency }) {
   const d = payload[0].payload
   return (
     <div className="chart-tooltip">
-      <div className="tooltip-label">{new Date(label).toLocaleDateString()}</div>
+      <div className="tooltip-label">{portfolioTooltipDate(d.time ?? label)}</div>
       <p>Total: <b>{formatCurrency(d.total_value)}</b></p>
       <p>Holdings: <b>{formatCurrency(d.holdings_value)}</b></p>
       <p>Cash: <b>{formatCurrency(d.cash_balance)}</b></p>
@@ -73,7 +68,9 @@ export default function Analytics() {
   const [snapshots,     setSnapshots]     = useState([])
   const [loading,       setLoading]       = useState(true)
   const [snapLoading,   setSnapLoading]   = useState(true)
-  const [period,        setPeriod]        = useState(30)
+  const [period,        setPeriod]        = useState('5y')
+  const [boundaries,    setBoundaries] = useState({ firstValue: null, lastValue: null })
+  const [snapError,     setSnapError] = useState(null)
   const [error,         setError]         = useState(null)
 
   const fetchPortfolio = useCallback(async () => {
@@ -88,14 +85,15 @@ export default function Analytics() {
   }, [])
 
   const snapshotVersion = useRef(0)
-  const fetchSnapshots = useCallback(async (days = period) => {
+  const fetchSnapshots = useCallback(async (selectedPeriod = period) => {
     const version = ++snapshotVersion.current
     setSnapLoading(true)
+    setSnapError(null)
     try {
-      const { data } = await portfolioAPI.snapshots(days)
-      if (version === snapshotVersion.current) setSnapshots(data.snapshots || [])
+      const { data } = await portfolioAPI.history(selectedPeriod)
+      if (version === snapshotVersion.current) { setSnapshots(data.snapshots || []); setBoundaries(data) }
     } catch (err) {
-      if (version === snapshotVersion.current) setError(err?.response?.data?.error || 'Failed to load snapshots')
+      if (version === snapshotVersion.current) setSnapError(err?.response?.data?.error || 'Failed to load portfolio history. Try Refresh.')
     } finally { if (version === snapshotVersion.current) setSnapLoading(false) }
   }, [period])
 
@@ -152,8 +150,8 @@ export default function Analytics() {
     }))
 
   // Portfolio growth chart color
-  const firstSnap = snapshots[0]?.total_value
-  const lastSnap  = snapshots[snapshots.length - 1]?.total_value
+  const firstSnap = boundaries.firstValue
+  const lastSnap  = boundaries.lastValue
   const chartUp   = (lastSnap ?? 0) >= (firstSnap ?? 0)
   const chartColor = chartUp ? 'var(--green)' : 'var(--red)'
 
@@ -202,40 +200,43 @@ export default function Analytics() {
 
         {/* ── Portfolio growth chart ── */}
         <section className="card chart-section">
-          <div className="card-header">
+          <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2 className="card-title">Portfolio Value Over Time</h2>
-              {snapshots.length > 0 && firstSnap && lastSnap && (
+              {!snapLoading && !snapError && snapshots.length > 0 && firstSnap > 0 && lastSnap != null && (
                 <p className={`card-sub ${chartUp ? 'pos' : 'neg'}`}>
                   {chartUp ? '▲' : '▼'} {pct(((lastSnap - firstSnap) / firstSnap) * 100)} over period
                 </p>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div className="period-tabs">
-                {PERIOD_OPTIONS.map((p) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', maxWidth: '100%' }}>
+              <div className="period-tabs" role="group" aria-label="Portfolio history range" style={{ flexWrap: 'wrap' }}>
+                {PORTFOLIO_PERIODS.map((p) => (
                   <button
-                    key={p.days}
-                    className={`period-btn ${period === p.days ? 'active' : ''}`}
-                    onClick={() => setPeriod(p.days)}
+                    key={p.value}
+                    className={`period-btn ${period === p.value ? 'active' : ''}`}
+                    aria-pressed={period === p.value}
+                    onClick={() => setPeriod(p.value)}
                   >
                     {p.label}
                   </button>
                 ))}
               </div>
-              <button className="icon-btn" onClick={() => fetchSnapshots(period)} title="Refresh">
+              <button className="icon-btn" onClick={() => fetchSnapshots(period)} title="Refresh" aria-label="Refresh portfolio history">
                 <RefreshCw size={14} />
               </button>
             </div>
           </div>
 
           {snapLoading ? (
-            <div className="chart-empty" style={{ height: 220 }}>
+            <div className="chart-empty" role="status" style={{ height: 220 }}>
               Loading chart…
             </div>
+          ) : snapError ? (
+            <div className="chart-empty" role="alert" style={{ height: 220 }}>{snapError}</div>
           ) : snapshots.length < 2 ? (
             <div className="chart-empty" style={{ height: 220 }}>
-              Not enough data yet. Place trades to see your portfolio grow.
+              Not enough samples in this range. Choose a longer range or check back later.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
@@ -248,8 +249,9 @@ export default function Analytics() {
                 </defs>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
                 <XAxis
-                  dataKey="date"
-                  tickFormatter={(v) => new Date(v).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                  dataKey="time" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                  tickFormatter={(v) => portfolioTick(v, period)}
+                  minTickGap={35}
                   tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   tickLine={false} axisLine={false}
                   interval="preserveStartEnd"

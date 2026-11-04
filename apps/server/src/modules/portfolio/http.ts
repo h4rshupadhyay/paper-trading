@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { type HttpDependencies, requireSession } from '../../platform/http.js';
 import { AppError } from '../../platform/errors.js';
 import { pagination } from '../trading/http.js';
+import { readPortfolioHistory } from './history.js';
 import { readPortfolio } from './service.js';
 export function portfolioRoutes({pool}:HttpDependencies):Router{
   const router=Router();
   router.get('/portfolio',async(req,res)=>{const {principal}=await requireSession(pool,req);if(Object.keys(req.query).length)throw new AppError(400,'VALIDATION_ERROR','Invalid query');res.json(await readPortfolio(pool,principal.user.id));});
+  router.get('/portfolio/history',async(req,res)=>{const {principal}=await requireSession(pool,req);res.json(await readPortfolioHistory(pool,principal.user.id,req.query));});
   router.get('/portfolio/snapshots',async(req,res)=>{const {principal}=await requireSession(pool,req);const {limit,cursor}=pagination(req.query,['days']);
     const rawDays=req.query.days;
     if(rawDays!==undefined&&(typeof rawDays!=='string'||!/^\d{1,4}$/.test(rawDays)||Number(rawDays)<1||Number(rawDays)>1825))throw new AppError(400,'VALIDATION_ERROR','Invalid snapshot range');

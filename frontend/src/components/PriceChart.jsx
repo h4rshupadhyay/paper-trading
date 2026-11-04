@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -70,12 +70,15 @@ function CustomTooltip({ active, payload, label, chartType, fp }) {
   )
 }
 
-export default function PriceChart({ ticker }) {
+export default function PriceChart({ ticker, quoteSnapshot }) {
   const { formatPrice } = useRegion()
   const priceCurr = tickerCurrency(ticker)
   const fp = (n) => n != null ? formatPrice(n, { from: priceCurr }) : '—'
 
-  const [data, setData]       = useState([])
+  const [snapshot, setSnapshot] = useState(null)
+  const lastSnapshot = useRef(null)
+  const [retry, setRetry] = useState(0)
+  const data = snapshot?.data || []
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [period, setPeriod]   = useState(PERIODS[2])   // default 1M
@@ -83,25 +86,39 @@ export default function PriceChart({ ticker }) {
 
   useEffect(() => {
     if (!ticker) return
+    let active = true
+    const storageKey = `paper:chart:${ticker}`
+    let saved = {}
+    try { saved = JSON.parse(sessionStorage.getItem(storageKey) || '{}') || {} } catch { /* Storage may be disabled. */ }
+    const valid = value => value?.ticker === ticker && Array.isArray(value.data) && value.data.length > 0
+      && value.data.length <= 2000 && value.data.every(bar => Number.isFinite(bar.close) && bar.close > 0)
+      && PERIODS.some(p => p.value === value.period) && Number.isFinite(Date.parse(value.savedAt))
+    const previous = valid(lastSnapshot.current) ? lastSnapshot.current : Object.values(saved).filter(valid).sort((a,b) => Date.parse(b.savedAt)-Date.parse(a.savedAt))[0]
+    const fallback = valid(saved[period.value]) ? saved[period.value] : previous
+    setSnapshot(fallback || null)
     setLoading(true)
     setError(null)
     stocksAPI.history(ticker, period.value, period.interval)
       .then(({ data: res }) => {
-        const formatted = (res.data || []).map((d) => ({
+        if (!active) return
+        if (!res.data?.length) throw new Error('No chart data available for this range.')
+        const formatted = res.data.map((d) => ({
           ...d,
           label: period.value === '1d' || period.value === '5d'
             ? new Date(d.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : new Date(d.time).toLocaleDateString([], { month: 'short', day: 'numeric' }),
         }))
-        setData(formatted)
+        const next = { ticker, period: period.value, data: formatted, savedAt: new Date().toISOString() }
+        setSnapshot(next)
+        lastSnapshot.current = next
+        try { sessionStorage.setItem(storageKey, JSON.stringify({ ...saved, [period.value]: next })) } catch { /* In-memory fallback remains available. */ }
       })
-      .catch((e) => setError(e.response?.data?.error || 'Failed to load chart data'))
-      .finally(() => setLoading(false))
-  }, [ticker, period])
-
-  if (loading) return <SkeletonChart />
-  if (error)   return <div className="chart-error">{error}</div>
-  if (!data.length) return <div className="chart-empty">No chart data available</div>
+      .catch((e) => {
+        if (active) setError(e.response?.data?.error || e.message || 'Failed to load chart data')
+      })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [ticker, period, retry])
 
   const minPrice = Math.min(...data.map((d) => d.low  || d.close)) * 0.998
   const maxPrice = Math.max(...data.map((d) => d.high || d.close)) * 1.002
@@ -137,6 +154,20 @@ export default function PriceChart({ ticker }) {
         </div>
       </div>
 
+      {error && (
+        <div role="status" className="chart-error">
+          {error} {snapshot ? `Showing saved ${PERIODS.find(p => p.value === snapshot.period)?.label} history, fetched ${new Date(snapshot.savedAt).toLocaleString()}. This is not live data.` : 'Try another range or retry.'}
+          {' '}<button className="period-btn" onClick={() => setRetry(value => value + 1)}>Retry</button>
+        </div>
+      )}
+      {error && !snapshot && quoteSnapshot?.price != null && (
+        <p className="text-muted">Latest saved price: {fp(quoteSnapshot.price)}
+          {quoteSnapshot.observedAt ? ` as of ${new Date(quoteSnapshot.observedAt).toLocaleString()}` : ''}.
+          {' '}A single quote does not contain price history.
+        </p>
+      )}
+      {loading && <SkeletonChart />}
+      {!loading && data.length > 0 && <>
       {/* Chart */}
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -199,6 +230,7 @@ export default function PriceChart({ ticker }) {
           )}
         </ComposedChart>
       </ResponsiveContainer>
+      </>}
     </div>
   )
 }

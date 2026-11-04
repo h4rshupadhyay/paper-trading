@@ -7,12 +7,14 @@ import signal
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
+
 from streaming import StreamHub
 
 # yfinance 1.7 exposes errors through config; raise_errors is deprecated.
@@ -197,6 +199,121 @@ class MarketData:
             return dict(instrument=canonical, items=bars)
         return self.cached(('history', requested, period, interval), fetch)
 
+    def demo_history(self, now=None, period='1mo'):
+        """Fixed, bounded maintenance export; never write these as live observations.
+
+        Daily dates are not observation timestamps. A bar is usable only after
+        the next exchange-local midnight. Reference times are regular session
+        ends (conservative on early-close days); FX uses next local midnight.
+        """
+        if period not in ('1mo', '5y'):
+            raise ValueError('Invalid demo history period')
+        now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            raise Unavailable('Missing retrieval timezone')
+        now = now.astimezone(timezone.utc)
+        series = {}
+        for requested, currency, zone, close_hour, close_minute in (
+            ('AAPL', 'USD', 'America/New_York', 16, 0),
+            ('MSFT', 'USD', 'America/New_York', 16, 0),
+            ('RELIANCE.NS', 'INR', 'Asia/Kolkata', 15, 30),
+            ('USDINR=X', 'INR', 'Europe/London', 0, 0),
+        ):
+            meta, frame = self.wait(self.submit(lambda s=requested: self.load(s, period, '1d')))
+            if meta.get('symbol') != requested or meta.get('currency') != currency or meta.get('instrumentType') != ('CURRENCY' if requested == 'USDINR=X' else 'EQUITY'):
+                raise Unavailable('Demo history metadata mismatch')
+            if not {'Close', 'Dividends', 'Stock Splits'}.issubset(frame.columns):
+                raise Unavailable('Demo action history missing')
+            if period == '5y':
+                series[requested] = dict(currency=currency, items=self.demo_five_year_items(
+                    frame, requested, zone, close_hour, close_minute, now))
+                continue
+            items = []
+            for row in frame.tail(40).itertuples(name=None):
+                values = dict(zip(frame.columns, row[1:]))
+                stamp = row[0]
+                if getattr(stamp, 'tzinfo', None) is None or str(stamp.tzinfo) != zone:
+                    raise Unavailable('Demo history timezone mismatch')
+                start = datetime.combine(stamp.date(), datetime.min.time(), ZoneInfo(zone))
+                available = start + timedelta(days=1)
+                # A current-session split can already alter past Yahoo bars.
+                # Inspect actions before excluding the incomplete price bar.
+                if Decimal(decimal(values['Dividends'], zero=True)) != 0 or Decimal(decimal(values['Stock Splits'], zero=True)) != 0:
+                    raise Unavailable('Demo window contains unsupported corporate actions')
+                if available > now:
+                    continue
+                closed = available if requested == 'USDINR=X' else start.replace(hour=close_hour, minute=close_minute)
+                if requested != 'USDINR=X' and start.weekday() >= 5:
+                    raise Unavailable('Unexpected weekend equity session')
+                price = Decimal(decimal(values['Close'])).quantize(Decimal('0.00000001') if requested == 'USDINR=X' else Decimal('0.01'), rounding=ROUND_HALF_UP)
+                items.append(dict(sessionDate=start.date().isoformat(), closedAt=observed(closed), availableAt=observed(available), close=decimal(price)))
+            if not items:
+                raise Unavailable('Demo history unavailable')
+            series[requested] = dict(currency=currency, items=items)
+        if period == '5y':
+            result = dict(version=3, source='yfinance', priceBasis='contemporaneous',
+                          fetchedAt=now.isoformat().replace('+00:00', 'Z'), series=series)
+            if len(json.dumps(result, allow_nan=False).encode()) > 2_000_000:
+                raise Unavailable('Demo history too large')
+            return result
+        return dict(source='yfinance', fetchedAt=now.isoformat().replace('+00:00', 'Z'), corporateActions='none', series=series)
+
+    def demo_five_year_items(self, frame, requested, zone, close_hour, close_minute, now):
+        # Yahoo's Close and cash dividends are split-normalized even with
+        # auto_adjust=False. Undo only later splits; the ex-date row already
+        # uses post-split share units. Never use Adj Close (dividend-adjusted).
+        if not 0 < len(frame) <= 1400 or not frame.index.is_monotonic_increasing or not frame.index.is_unique:
+            raise Unavailable('Invalid demo history rows')
+        supported = {'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits', 'Capital Gains'}
+        if not frame.columns.is_unique or set(frame.columns) - supported:
+            raise Unavailable('Unsupported history fields')
+        rows = []
+        for row in frame.itertuples(name=None):
+            values = dict(zip(frame.columns, row[1:]))
+            stamp = row[0]
+            if getattr(stamp, 'tzinfo', None) is None or str(stamp.tzinfo) != zone:
+                raise Unavailable('Demo history timezone mismatch')
+            start = datetime.combine(stamp.date(), datetime.min.time(), ZoneInfo(zone))
+            if stamp != start or start.date() > now.astimezone(ZoneInfo(zone)).date():
+                raise Unavailable('Invalid source session date')
+            dividend = Decimal(decimal(values['Dividends'], zero=True))
+            raw_split = Decimal(decimal(values['Stock Splits'], zero=True))
+            split = raw_split or Decimal(1)
+            if dividend >= Decimal('1e12') or not Decimal('0.000001') <= split <= Decimal('1e6'):
+                raise Unavailable('Invalid corporate action')
+            if 'Capital Gains' in values and Decimal(decimal(values['Capital Gains'], zero=True)) != 0:
+                raise Unavailable('Unsupported capital gains')
+            if requested == 'USDINR=X' and (dividend != 0 or split != 1):
+                raise Unavailable('Unexpected FX action')
+            # A live post-action quote cannot match a replay that omits that
+            # unfinished session's action. Wait until its daily fact is usable.
+            if start + timedelta(days=1) > now and (dividend != 0 or raw_split != 0):
+                raise Unavailable('Unfinished source session contains corporate actions')
+            rows.append((start, values['Close'], dividend, split))
+        items = []
+        future_splits = Decimal(1)
+        for start, raw_close, dividend, split in reversed(rows):
+            available = start + timedelta(days=1)
+            if available <= now:
+                closed = available if requested == 'USDINR=X' else start.replace(hour=close_hour, minute=close_minute)
+                price = Decimal(decimal(raw_close)) * future_splits
+                dividend *= future_splits
+                if price >= Decimal('1e12') or dividend >= Decimal('1e12'):
+                    raise Unavailable('Invalid contemporaneous amount')
+                price = price.quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP)
+                dividend = dividend.quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP)
+                # Retain eight decimals before entitlement multiplication;
+                # rounding per-share dividends to cents changes cash credits.
+                items.append(dict(sessionDate=start.date().isoformat(), closedAt=observed(closed),
+                                  availableAt=observed(available), close=decimal(price),
+                                  dividend=decimal(dividend, zero=True) if dividend else '0', split=decimal(split)))
+            future_splits *= split
+            if not Decimal('1e-12') <= future_splits <= Decimal('1e12'):
+                raise Unavailable('Invalid cumulative split factor')
+        if not items:
+            raise Unavailable('Demo history unavailable')
+        return list(reversed(items))
+
     def statistics(self, requested):
         symbol(requested)
         def fetch():
@@ -290,7 +407,7 @@ def route(service, target):
             raise ValueError('Invalid request target')
         params = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=8)
         allowed = {'/health': set(), '/search': {'q'}, '/quote': {'symbol'},
-                   '/history': {'symbol', 'period', 'interval'}, '/statistics': {'symbol'}, '/fx': {'currency'}}
+                   '/demo-history': {'period'}, '/history': {'symbol', 'period', 'interval'}, '/statistics': {'symbol'}, '/fx': {'currency'}}
         if parsed.path not in allowed:
             return 404, {'error': 'Not found'}
         if set(params) - allowed[parsed.path] or any(len(v) != 1 for v in params.values()):
@@ -298,6 +415,8 @@ def route(service, target):
         values = {k: v[0] for k, v in params.items()}
         if parsed.path == '/health':
             return 200, {'ok': True}
+        if parsed.path == '/demo-history':
+            return 200, service.demo_history(period=values.get('period', '1mo'))
         if parsed.path == '/search':
             return 200, {'items': service.search(values.get('q', ''))}
         if parsed.path == '/quote':

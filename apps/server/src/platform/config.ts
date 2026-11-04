@@ -41,5 +41,5 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
   if (!csrfSecret || !csrfSecret.trim() || Buffer.byteLength(csrfSecret, 'utf8') < 32) invalid('CSRF_SECRET');
 
   if (env.TRUST_PROXY_HOPS !== undefined && env.TRUST_PROXY_HOPS !== '1') invalid('TRUST_PROXY_HOPS');
-  return { ...(env.TRUST_PROXY_HOPS === '1' ? {trustProxyHops: 1 as const} : {}), nodeEnv, port, databaseUrl, expectedSchemaVersion: 5, publicOrigin, csrfSecret };
+  return { ...(env.TRUST_PROXY_HOPS === '1' ? {trustProxyHops: 1 as const} : {}), nodeEnv, port, databaseUrl, expectedSchemaVersion: 6, publicOrigin, csrfSecret };
 }

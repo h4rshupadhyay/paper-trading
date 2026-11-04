@@ -21,6 +21,19 @@ Earlier changes remain available in Git history.
 - Deterministic stream lifecycle, financial and browser regressions, plus actual
   Yahoo probes. See [streaming verification](docs/testing/STREAMING_2026-11-04.md).
 
+### Added — demo account and portfolio history
+
+- Normal demo-user login in the existing application, with repeat-safe seeding
+  from validated yfinance history instead of a separate runtime environment.
+- Five years of simulated trades at historical closing prices and as-of FX,
+  with split/dividend accounting, reconciliation and guarded owner-maintenance
+  upgrades that preserve credentials and user activity. Schema 6 records immutable
+  account actions and durable demo provenance.
+- Bounded portfolio-history ranges from 1D through 5Y on Dashboard and Analytics,
+  with calendar-aware aggregation, proportional time axes and request-race guards.
+- Deterministic accounting, upgrade and range regressions; the portfolio-history
+  browser workflow runs in the standard end-to-end suite.
+
 ### Changed — 2026-11-04
 
 - Upgraded the market-data service from **yfinance 1.7.0 to 1.8.0** in both the

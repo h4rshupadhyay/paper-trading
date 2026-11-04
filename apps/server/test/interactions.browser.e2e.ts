@@ -14,6 +14,8 @@ import { createHarness } from './harness.js';
 import { registerUser } from '../src/modules/identity/registration.js';
 import { hashPassword } from '../src/modules/identity/passwords.js';
 import { login } from '../src/modules/identity/sessions.js';
+import { demoHistory } from './fixtures/demo-history.js';
+import { seedDemo } from '../src/modules/demo/seed.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const h = await createHarness();
@@ -340,19 +342,19 @@ try {
       SELECT s.account_id,s.account_sequence,s.sample_bucket-interval '2 days',s.sampled_at-interval '2 days',s.cash_balance,s.holdings_value,s.total_value,s.unrealized_pl,s.quality,s.observed_from,s.observed_to
       FROM portfolio_snapshots s JOIN accounts a ON a.id=s.account_id WHERE a.user_id=$1`,[user.id]);
     await page.goto(origin+'/analytics');await expect(page.locator('.chart-section .recharts-area-curve')).toHaveCount(1);
-    for(const [label,days] of [['7D','7'],['1M','30'],['3M','90'],['6M','180'],['1Y','365']] as const){
-      const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/snapshots'&&new URL(r.url()).searchParams.get('days')===days);
+    for(const [label,period] of [['1D','1d'],['5D','5d'],['1M','1mo'],['3M','3mo'],['6M','6mo'],['1Y','1y'],['5Y','5y']] as const){
+      const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/history'&&new URL(r.url()).searchParams.get('period')===period);
       await page.getByRole('button',{name:label,exact:true}).click();const snapshots=await response;
-      assert.equal(snapshots.status(),200);assert.equal((await snapshots.json()).items.length,2);
-      await expect(page.locator('.period-tabs .active')).toHaveText(label);await expect(page.locator('.chart-section .recharts-area-curve')).toHaveCount(1);
+      assert.equal(snapshots.status(),200);assert.equal((await snapshots.json()).items.length,period==='1d'?1:2);
+      await expect(page.locator('.period-tabs .active')).toHaveText(label);await expect(page.locator('.chart-section .recharts-area-curve')).toHaveCount(period==='1d'?0:1);
     }
-    const refreshed=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/snapshots'&&new URL(r.url()).searchParams.get('days')==='365');
-    await page.getByTitle('Refresh',{exact:true}).click();assert.equal((await refreshed).status(),200);await expect(page.locator('.period-tabs .active')).toHaveText('1Y');
+    const refreshed=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/history'&&new URL(r.url()).searchParams.get('period')==='5y');
+    await page.getByTitle('Refresh',{exact:true}).click();assert.equal((await refreshed).status(),200);await expect(page.locator('.period-tabs .active')).toHaveText('5Y');
     await expect(page.locator('.composition-stats')).toContainText('Holdings');await expect(page.locator('.composition-stats')).toContainText('Cash');
     await expect(page.locator('.analytics-charts-row .recharts-pie')).toHaveCount(1);
     await expect(page.locator('.analytics-charts-row')).toContainText('Sector data unavailable for these holdings.');
     await page.goto(origin+'/dashboard');await expect(page.locator('.chart-section .recharts-area-curve')).toHaveCount(1);
-    const history=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/snapshots');
+    const history=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio/history');
     await page.locator('.chart-section').getByTitle('Refresh',{exact:true}).click();assert.equal((await history).status(),200);
     const portfolio=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/portfolio');
     await page.locator('section.card').filter({has:page.getByRole('heading',{name:'Holdings',exact:true})}).getByTitle('Refresh',{exact:true}).click();
@@ -479,6 +481,26 @@ try {
         else await expect(page.locator('tbody tr')).toHaveCount(1);
       } finally {release();allowRead();await page.unroute('**/api/watchlists/'+kind);await page.unroute('**/api/watchlists');}
     }
+  });
+  await scenario('UI-035 seeded demo signs in normally and shows populated features',async ({page,request})=>{
+    const password='demo browser password 123';
+    await seedDemo(h.appPool,{password,nodeEnv:'test',provider:'fixture',history:demoHistory()});
+    // Normal login form, including the usual cookie and CSRF/auth middleware.
+    await page.goto(origin+'/login');
+    // The scenario fixture is already signed in; revoke it before opening login.
+    const csrf=await (await request.get(origin+'/api/auth/csrf')).json();
+    assert.equal((await request.post(origin+'/api/auth/logout',{headers:{Origin:origin,'X-CSRF-Token':csrf.csrfToken}})).status(),204);
+    await page.goto(origin+'/login');await page.getByLabel('Username',{exact:true}).fill('demo');
+    await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign In',exact:true}).click();
+    await expect(page.locator('.sidebar-user .user-name')).toHaveText('demo');
+    await expect(page.locator('tbody tr')).toHaveCount(3);
+    for(const symbol of ['AAPL','MSFT','RELIANCE.NS'])await expect(page.locator('tbody')).toContainText(symbol);
+    const portfolio=await (await request.get(origin+'/api/portfolio')).json();assert.equal(portfolio.account.cashBalance,'707500.00');assert.equal(portfolio.positions.length,3);
+    assert.equal((await (await request.get(origin+'/api/account/reconciliation')).json()).balanced,true);
+    await page.goto(origin+'/notes');await expect(page.locator('.note-item')).toHaveCount(3);await expect(page.locator('.notes-list')).toContainText('Demo: history provenance');
+    await page.goto(origin+'/pending-orders');await expect(page.locator('tbody tr')).toHaveCount(3);
+    await page.goto(origin+'/watchlist');await expect(page.locator('tbody tr')).toHaveCount(3);
+    assert.equal((await (await request.get(origin+'/api/notifications?unread=true')).json()).items.length,1);
   });
   console.log(`Interaction scenarios: ${passed} passed, ${failures.length} failed`);
   assert.deepEqual(failures,[], 'Interaction regressions');
