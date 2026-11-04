@@ -10,6 +10,9 @@ import OrderForm from '../components/OrderForm'
 import { SkeletonTable } from '../components/LoadingSkeleton'
 import TickerInput from '../components/TickerInput'
 import { watchlistAPI, stocksAPI } from '../services/api'
+import { useMarketStream } from '../hooks/useMarketStream'
+import { mergeWatchlistQuotes } from '../services/quoteStream'
+import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
 export default function Watchlist() {
@@ -40,6 +43,17 @@ export default function Watchlist() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
+  const streamQuotes = useRef(new Map())
+  useEffect(()=>{
+    const ids=new Set(items.map(item=>item.instrumentId))
+    for(const id of streamQuotes.current.keys())if(!ids.has(id))streamQuotes.current.delete(id)
+  },[items])
+  useMarketStream(items.map(item => item.instrumentId), event => {
+    if (event.type !== 'quote') return
+    streamQuotes.current.set(event.packet.instrumentId, event.packet)
+    setItems(current => mergeWatchlistQuotes(current, streamQuotes.current))
+  })
+
   const listRequest = useRef(0)
   const listRevision = useRef(0)
   const fetchWatchlist = useCallback(async ({ background = false } = {}) => {
@@ -51,7 +65,7 @@ export default function Watchlist() {
       const { data } = await watchlistAPI.get()
       if (version !== listRequest.current) return
       if (revision !== listRevision.current) { void fetchWatchlist({ background: true }); return }
-      setItems(data.watchlist || [])
+      setItems(mergeWatchlistQuotes(data.watchlist || [], streamQuotes.current))
       const newFolders = data.folders || []
       setFolders(newFolders)
       // If active tab was deleted, fall back to uncategorised
@@ -65,6 +79,8 @@ export default function Watchlist() {
       if (version === listRequest.current) setLoading(false)
     }
   }, [])
+
+  useBackgroundRefresh(() => fetchWatchlist({background:true}))
 
   useEffect(() => { fetchWatchlist(); return () => { listRequest.current++ } }, [fetchWatchlist])
 

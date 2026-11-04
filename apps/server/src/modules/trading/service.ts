@@ -113,7 +113,9 @@ export async function submitOrder(pool:Pool,userId:string,value:unknown,idempote
     if(!instrument.tradable||instrument.paused||instrument.kind!=='EQUITY'||(process.env.NODE_ENV==='production'&&instrument.provider==='fixture'))throw new AppError(409,'INSTRUMENT_UNAVAILABLE','Instrument unavailable for trading');
     const id=(await c.query<{id:string}>(`INSERT INTO orders(account_id,instrument_id,idempotency_key,intent_fingerprint,side,type,quantity,limit_price,stop_price,expires_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,[account.id,input.instrumentId,key,fingerprint,input.side,input.type,input.quantity,input.limitPrice??null,input.stopPrice??null,input.expiresAt??null])).rows[0]!.id;
-    if(input.type==='MARKET')await processOrder(c,account,id,true);return {order:await view(c,id),replayed:false};
+    if(input.type==='MARKET')await processOrder(c,account,id,true);
+    await c.query("SELECT pg_notify('paper_market_activity','{}')");
+    return {order:await view(c,id),replayed:false};
   }));
 }
 export async function cancelOrder(pool:Pool,userId:string,orderId:string):Promise<OrderView>{
@@ -122,14 +124,18 @@ export async function cancelOrder(pool:Pool,userId:string,orderId:string):Promis
     const o=(await c.query<{status:string}>('SELECT status FROM orders WHERE id=$1 AND account_id=$2 FOR UPDATE',[orderId,account.id])).rows[0];
     if(!o)throw new AppError(404,'ORDER_NOT_FOUND','Order not found');
     if(!live(o.status))throw new AppError(409,'ORDER_STATE_CONFLICT','Only live orders can be cancelled');
-    await c.query(`UPDATE orders SET status='CANCELLED',completed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`,[orderId]);return view(c,orderId);
+    await c.query(`UPDATE orders SET status='CANCELLED',completed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`,[orderId]);
+    await c.query("SELECT pg_notify('paper_market_activity','{}')");return view(c,orderId);
   }));
 }
 export async function evaluatePending(pool:Pool):Promise<void>{
   const candidates=(await pool.query<{user_id:string;account_id:string}>(`SELECT a.user_id,o.account_id FROM orders o JOIN accounts a ON a.id=o.account_id WHERE o.status IN ('OPEN','TRIGGERED') GROUP BY a.user_id,o.account_id ORDER BY min(o.evaluated_at),o.account_id LIMIT 100`)).rows;
   for(const candidate of candidates)await retry(()=>withTransaction(pool,async c=>{
     const account=(await c.query<Account>(`SELECT a.id,a.cash_balance::text,a.cash_sequence::text,u.active FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.id=$1 FOR UPDATE OF a SKIP LOCKED`,[candidate.account_id])).rows[0];if(!account)return;
-    const ids=(await c.query<{id:string}>(`SELECT id FROM orders WHERE account_id=$1 AND status IN ('OPEN','TRIGGERED') ORDER BY evaluated_at,created_at,id LIMIT 100`,[account.id])).rows;
+    const ids=(await c.query<{id:string;status:string}>(`SELECT id,status FROM orders WHERE account_id=$1 AND status IN ('OPEN','TRIGGERED') ORDER BY evaluated_at,created_at,id LIMIT 100`,[account.id])).rows;
     for(const {id} of ids)await processOrder(c,account,id);
+    const changed=(await c.query(`SELECT 1 FROM orders o JOIN jsonb_to_recordset($1::jsonb) AS prior(id uuid,status text)
+      ON o.id=prior.id WHERE o.status<>prior.status LIMIT 1`,[JSON.stringify(ids)])).rowCount;
+    if(changed)await c.query("SELECT pg_notify('paper_market_activity','{}')");
   }));
 }

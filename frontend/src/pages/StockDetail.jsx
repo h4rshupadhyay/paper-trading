@@ -10,6 +10,8 @@ import PriceChart from '../components/PriceChart'
 import OrderForm from '../components/OrderForm'
 import { Skeleton } from '../components/LoadingSkeleton'
 import { stocksAPI, watchlistAPI } from '../services/api'
+import { useSymbolQuote } from '../hooks/useMarketStream'
+import { mergeQuote } from '../services/quoteStream'
 import { canTradeQuote } from '../services/contracts'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
@@ -58,6 +60,7 @@ function InstrumentDetail({ ticker }) {
   const [showFolderPicker, setShowFolderPicker] = useState(false)
   const folderPickerRef = useRef(null)
 
+  const streamLive = useSymbolQuote(ticker, packet => setQuote(current => current ? mergeQuote(current, packet) : current))
   const loaded = useRef(false)
   const requestVersion = useRef(0)
   const fetchQuote = useCallback(async () => {
@@ -69,7 +72,7 @@ function InstrumentDetail({ ticker }) {
       if (version !== requestVersion.current) return
       loaded.current = true
       setLoading(false)
-      setQuote(data)
+      setQuote(current => mergeQuote(current, data))
       setStatisticsLoading(!data.statisticsFetchedAt)
       if (!data.statisticsFetchedAt) {
         try {
@@ -102,9 +105,13 @@ function InstrumentDetail({ ticker }) {
   useEffect(() => {
     fetchQuote()
     checkWatchlist()
-    const timer = setInterval(fetchQuote, 15000)
-    return () => { clearInterval(timer); requestVersion.current++ }
+    return () => { requestVersion.current++ }
   }, [fetchQuote, checkWatchlist])
+
+  useEffect(() => {
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') void fetchQuote() }, streamLive ? 60000 : 15000)
+    return () => clearInterval(timer)
+  }, [fetchQuote, streamLive])
 
   // Close folder picker on outside click
   useEffect(() => {
@@ -292,7 +299,7 @@ function InstrumentDetail({ ticker }) {
                   <RefreshCw size={15} />
                 </button>
               </div>
-              <PriceChart ticker={ticker} />
+              <PriceChart ticker={ticker} quoteSnapshot={quote} />
             </section>
 
             {/* Description */}

@@ -11,6 +11,7 @@ const noteFrom = 'notes n LEFT JOIN instruments i ON i.id=n.instrument_id';
 const alertFields = `a.id,a.instrument_id AS "instrumentId",i.symbol,i.currency,a.condition,a.target_price AS "targetPrice",
   a.active,a.created_at AS "createdAt",a.triggered_at AS "triggeredAt"`;
 const entryFields = `e.id,e.folder_id AS "folderId",e.instrument_id AS "instrumentId",i.symbol,i.name,i.currency,e.created_at AS "createdAt",q.price,
+  q.observed_at AS "observedAt",q.fetched_at AS "fetchedAt",
   CASE WHEN q.price IS NULL OR i.paused THEN 'UNAVAILABLE'
     WHEN CASE WHEN q.provider='yfinance' THEN q.fetched_at ELSE q.observed_at END<now()-interval '60 seconds'
       OR q.observed_at>now()+interval '5 seconds' OR q.fetched_at>now()+interval '5 seconds' THEN 'STALE'
@@ -174,6 +175,8 @@ export async function evaluateAlerts(pool: Pool): Promise<void> {
     UPDATE price_alerts a SET active=false,triggered_at=statement_timestamp(),triggered_observed_at=c.observed_at
     FROM candidates c WHERE a.id=c.id AND a.active
     RETURNING a.id,a.user_id,a.target_price,c.symbol,c.currency
-  ) INSERT INTO notifications(user_id,alert_id,message)
-    SELECT user_id,id,symbol||' reached '||target_price::text||' '||currency FROM claimed`);
+  ), written AS (
+    INSERT INTO notifications(user_id,alert_id,message)
+    SELECT user_id,id,symbol||' reached '||target_price::text||' '||currency FROM claimed RETURNING id
+  ) SELECT pg_notify('paper_market_activity','{}') WHERE EXISTS(SELECT 1 FROM written)`);
 }

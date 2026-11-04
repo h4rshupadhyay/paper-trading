@@ -6,6 +6,8 @@ import { useRegion, REGIONS, tickerCurrency } from '../context/RegionContext'
 import StockSearch from './StockSearch'
 import ResourceError from './ResourceError'
 import { alertsAPI, stocksAPI, notificationsReadEvent } from '../services/api'
+import { useActivityRefresh, useSymbolQuote } from '../hooks/useMarketStream'
+import { mergeQuote } from '../services/quoteStream'
 import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { convertDisplayCurrency } from '../services/contracts'
 
@@ -40,6 +42,7 @@ function NotificationBell() {
     return () => { unreadVersion.current++; window.removeEventListener(notificationsReadEvent, read) }
   }, [fetchUnread])
   useBackgroundRefresh(fetchUnread)
+  useActivityRefresh(fetchUnread)
 
   useEffect(() => {
     if (!open) return
@@ -172,19 +175,20 @@ function RegionSelector() {
 function IndexTicker() {
   const { region, formatPrice } = useRegion()
   const [quote, setQuote]   = useState(null)
+  useSymbolQuote(region.index, packet => setQuote(current => current?.ticker === region.index ? mergeQuote(current, packet) : current))
 
   useEffect(() => {
     let cancelled = false
     setQuote(null)  // clear while loading new region
 
     stocksAPI.indexQuote(region.index)
-      .then(({ data }) => { if (!cancelled) setQuote(data) })
+      .then(({ data }) => { if (!cancelled) setQuote(current => current?.ticker === data.ticker ? mergeQuote(current, data) : data) })
       .catch(() => {})
 
     // Refresh every 60 s
     const interval = setInterval(() => {
       stocksAPI.indexQuote(region.index)
-        .then(({ data }) => { if (!cancelled) setQuote(data) })
+        .then(({ data }) => { if (!cancelled) setQuote(current => current?.ticker === data.ticker ? mergeQuote(current, data) : data) })
         .catch(() => {})
     }, 60_000)
 

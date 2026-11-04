@@ -13,6 +13,24 @@ export function getProvider(): MarketProvider {
 }
 const columns = `id,symbol,name,exchange,currency,multiplier,kind,tradable,paused,provider,unavailable_reason AS "unavailableReason"`;
 const decimal = /^(?:0|[1-9]\d{0,19})(?:\.\d{1,24})?$/;
+const streamReceipts = new WeakMap<Pool, Map<string,number>>();
+const unitChecks = new WeakMap<Pool, Map<string,number>>();
+export function streamUnitsDue(pool:Pool,id:string):boolean{return Date.now()-(unitChecks.get(pool)?.get(id)??0)>=60000;}
+function markUnitCheck(pool:Pool,id:string):void{
+  let checks=unitChecks.get(pool);if(!checks){checks=new Map();unitChecks.set(pool,checks);}
+  const now=Date.now();for(const [key,time]of checks)if(now-time>90000)checks.delete(key);
+  if(checks.size>=256&&!checks.has(id))checks.delete(checks.keys().next().value!);
+  checks.set(id,now);
+}
+/** Receipt of an accepted stream notification, never an HTTP cache hit. */
+export function markStreamReceipt(pool:Pool,id:string):void {
+  let receipts=streamReceipts.get(pool);
+  if(!receipts){receipts=new Map();streamReceipts.set(pool,receipts);}
+  const now=Date.now();
+  for(const [key,time] of receipts)if(now-time>15000)receipts.delete(key);
+  if(receipts.size>=256&&!receipts.has(id))receipts.delete(receipts.keys().next().value!);
+  receipts.set(id,now);
+}
 function positive(value: string): boolean { return typeof value === 'string' && decimal.test(value) && /[1-9]/.test(value); }
 function timestamp(value: string): boolean { const time = Date.parse(value); return typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(time) && time <= Date.now() + 5000 && time > 0; }
 function bounded<T>(promise: Promise<T>, ms = 8000): Promise<T> {
@@ -45,24 +63,53 @@ function validQuote(quote: ProviderQuote, instrument: Instrument): boolean {
   return positive(quote.rawPrice) && quote.rawCurrency === raw && timestamp(quote.observedAt)
     && ['REGULAR','CLOSED','UNKNOWN'].includes(quote.session) && typeof quote.actionKey === 'string' && quote.actionKey.length > 0 && quote.actionKey.length <= 256;
 }
-async function persistQuote(client: PoolClient, instrument: Instrument, quote: ProviderQuote, provider: MarketProvider): Promise<void> {
+async function persistQuote(client: PoolClient, instrument: Instrument, quote: ProviderQuote, provider: Pick<MarketProvider,'name'>, strict=false): Promise<boolean> {
   // The provider lock covers the network request; a short SQL transaction keeps pause+quote atomic.
   await client.query('BEGIN');
   try {
     const previous = (await client.query<{ action_key: string; eligible_action: boolean }>('SELECT action_key, observed_at <= $2::timestamptz AS eligible_action FROM public.latest_quotes WHERE instrument_id=$1', [instrument.id,quote.observedAt])).rows[0];
-    await client.query(`INSERT INTO public.latest_quotes(instrument_id,price,raw_currency,raw_price,observed_at,fetched_at,session,action_key,provider)
+    const saved=await client.query(`INSERT INTO public.latest_quotes(instrument_id,price,raw_currency,raw_price,observed_at,fetched_at,session,action_key,provider)
       SELECT $1,($2::numeric * $3::numeric)::numeric(20,8),$4,$2::numeric,$5,clock_timestamp(),$6,$7,$8
       WHERE $2::numeric * $3::numeric BETWEEN 0.00000001 AND 999999999999.99999999
       ON CONFLICT(instrument_id) DO UPDATE SET price=EXCLUDED.price,raw_currency=EXCLUDED.raw_currency,raw_price=EXCLUDED.raw_price,
-      observed_at=EXCLUDED.observed_at,fetched_at=EXCLUDED.fetched_at,session=EXCLUDED.session,action_key=EXCLUDED.action_key,provider=EXCLUDED.provider
+      observed_at=GREATEST(latest_quotes.observed_at,EXCLUDED.observed_at),fetched_at=EXCLUDED.fetched_at,session=EXCLUDED.session,action_key=EXCLUDED.action_key,provider=EXCLUDED.provider
       WHERE EXCLUDED.observed_at > latest_quotes.observed_at OR
-        (EXCLUDED.provider='yfinance' AND EXCLUDED.observed_at=latest_quotes.observed_at
+        (NOT $9::boolean AND EXCLUDED.provider='yfinance'
+         AND (EXCLUDED.observed_at=latest_quotes.observed_at OR EXCLUDED.observed_at=date_trunc('second',latest_quotes.observed_at))
          AND EXCLUDED.raw_price=latest_quotes.raw_price AND EXCLUDED.raw_currency=latest_quotes.raw_currency
          AND EXCLUDED.action_key=latest_quotes.action_key AND EXCLUDED.provider=latest_quotes.provider) RETURNING instrument_id`,
-    [instrument.id,quote.rawPrice,instrument.multiplier,quote.rawCurrency,quote.observedAt,quote.session,quote.actionKey,provider.name]);
-    if (previous?.eligible_action && previous.action_key !== quote.actionKey) await client.query('UPDATE public.instruments SET paused=true WHERE id=$1', [instrument.id]);
+    [instrument.id,quote.rawPrice,instrument.multiplier,quote.rawCurrency,quote.observedAt,quote.session,quote.actionKey,provider.name,strict]);
+    if ((!strict || saved.rowCount) && previous?.eligible_action && previous.action_key !== quote.actionKey) await client.query('UPDATE public.instruments SET paused=true WHERE id=$1', [instrument.id]);
+    if(saved.rowCount)await client.query("SELECT pg_notify('paper_market_quotes',$1)",[JSON.stringify({instrumentId:instrument.id,transport:strict?'stream':'http'})]);
     await client.query('COMMIT');
+    return !!saved.rowCount;
   } catch (error) { await client.query('ROLLBACK'); throw error; }
+}
+/** A pushed observation never renews an identical source timestamp. */
+export async function ingestStreamQuote(pool:Pool,id:string,quote:ProviderQuote):Promise<boolean>{
+  const instrument=await readInstrument(pool,id);
+  if(instrument.provider!=='yfinance'||quote.session!=='UNKNOWN'||quote.actionKey!=='yfinance-raw'
+    ||!positive(quote.rawPrice)||!timestamp(quote.observedAt))return false;
+  const client=await pool.connect();let locked=false,discard=false;
+  try{
+    locked=(await client.query<{locked:boolean}>('SELECT pg_try_advisory_lock(1480963203,hashtext($1)) AS locked',[id])).rows[0]!.locked;
+    if(!locked)return false;
+    const older=(await client.query('SELECT 1 FROM latest_quotes WHERE instrument_id=$1 AND observed_at >= $2::timestamptz',[id,quote.observedAt])).rowCount;
+    if(older)return false;
+    if(!validQuote(quote,instrument)){
+      if(typeof quote.rawCurrency==='string'&&quote.rawCurrency!==(instrument.multiplier==='0.01000000'?'GBp':instrument.currency)){
+        await client.query('UPDATE instruments SET paused=true WHERE id=$1',[id]);
+        await client.query("SELECT pg_notify('paper_market_quotes',$1)",[JSON.stringify({instrumentId:id,transport:'http'})]);
+      }
+      return false;
+    }
+    const saved=await persistQuote(client,instrument,quote,{name:'yfinance'},true);
+    if(saved)markStreamReceipt(pool,id);
+    return saved;
+  }finally{
+    if(locked)try{await client.query('SELECT pg_advisory_unlock(1480963203,hashtext($1))',[id]);}catch{discard=true;}
+    client.release(discard);
+  }
 }
 async function persistFx(client: PoolClient, currency: Currency, provider: MarketProvider, deadline = Date.now()+8000): Promise<void> {
   if (Date.now() >= deadline) return;
@@ -89,11 +136,13 @@ async function refreshWithinDeadline(pool: Pool, id: string, provider: MarketPro
     // Attempts rotate even on outage; this timestamp never changes observation freshness.
     await client.query('UPDATE public.instruments SET refresh_attempted_at=clock_timestamp() WHERE id=$1',[id]);
     let quote: ProviderQuote | undefined;
-    try { quote = await bounded(provider.quote(instrument),Math.max(1,deadline-Date.now())); } catch(error) {
+    try { if(provider.name!=='yfinance'||Date.now()-(streamReceipts.get(pool)?.get(id)??0)>=10000
+      ||streamUnitsDue(pool,id))
+      quote = await bounded(provider.quote(instrument),Math.max(1,deadline-Date.now())); } catch(error) {
       if(error instanceof YfinanceMetadataChanged)await client.query('UPDATE public.instruments SET paused=true WHERE id=$1',[instrument.id]);
       // An outage preserves observations without renewing their receipt time.
     }
-    if (quote && validQuote(quote, instrument)) await persistQuote(client, instrument, quote, provider);
+    if (quote && validQuote(quote, instrument)) {await persistQuote(client, instrument, quote, provider);if(provider.name==='yfinance')markUnitCheck(pool,id);}
     else if (quote && typeof quote.rawCurrency === 'string' && quote.rawCurrency !== (instrument.multiplier === '0.01000000' ? 'GBp' : instrument.currency)) await client.query('UPDATE public.instruments SET paused=true WHERE id=$1',[instrument.id]);
     await persistFx(client, instrument.currency, provider,deadline);
     if (instrument.currency !== 'INR') await persistFx(client, 'INR', provider,deadline);
