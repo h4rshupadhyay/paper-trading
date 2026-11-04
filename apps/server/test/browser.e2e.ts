@@ -24,6 +24,7 @@ try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(`${origin}/register`);await page.getByLabel('Username',{exact:true}).fill('browser_trader');await page.getByLabel('Email').fill('browser@example.com');await page.getByLabel('Password',{exact:true}).fill('browser secure password');await page.getByLabel('Confirm Password').fill('browser secure password');await page.getByRole('button',{name:'Create Account'}).click();await expect(page.getByText('Account created!')).toBeVisible();
  await expect(page).toHaveURL(/\/login$/);await page.getByLabel('Username',{exact:true}).fill('browser_trader');await page.getByLabel('Password',{exact:true}).fill('browser secure password');await page.getByRole('button',{name:'Sign In'}).click();await expect(page).toHaveURL(/\/dashboard$/);
+ await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
  const badResponses:string[]=[];page.on('response',response=>{if(response.url().includes('/api/')&&response.status()>=400)badResponses.push(`${response.status()} ${response.url()}`)});
  // React Router retains the current page during a lazy client-side transition.
  let releaseNotes!:()=>void;let notesRequested=false;
