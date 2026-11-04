@@ -8,6 +8,19 @@ Earlier changes remain available in Git history.
 
 ## Unreleased
 
+### Added — 2026-11-04
+
+- Shared yfinance WebSocket quotes, bounded subscriptions and fresh-client reconnects.
+  An elected worker persists validated ticks and an authenticated SSE feed updates
+  stock pages, watchlists, index prices, trade estimates and SQL-valued portfolios.
+- Event-driven pending-order and alert evaluation, coalesced to one batch per
+  second. Internal resource reads follow actual order/alert changes; unchanged
+  price ticks do not trigger portfolio reloads.
+- HTTP fallback and periodic unit validation, including verified metadata for NSE
+  ticks that omit currency. Source timestamps remain monotonic across fallback.
+- Deterministic stream lifecycle, financial and browser regressions, plus actual
+  Yahoo probes. See [streaming verification](docs/testing/STREAMING_2026-11-04.md).
+
 ### Changed — 2026-11-04
 
 - Upgraded the market-data service from **yfinance 1.7.0 to 1.8.0** in both the

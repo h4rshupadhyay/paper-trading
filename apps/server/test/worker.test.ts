@@ -28,6 +28,30 @@ it('uses a dedicated advisory lock to prevent competing worker batches',async()=
   await new Promise(r=>setTimeout(r,75));await Promise.all([first.stop(),second.stop()]);expect(calls).toBeGreaterThan(0);expect(max).toBe(1);
 });
 
+it('latches quote wakes during a batch and evaluates sequentially without repeating HTTP refresh or snapshots',async()=>{
+  let refreshes=0,snapshots=0,pending=0,active=0,max=0;
+  let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
+  const starts:number[]=[];
+  const worker=runWorkerLoop(h.appPool,{intervalMs:10000,refresh:async()=>{refreshes++;},
+    pending:async()=>{active++;max=Math.max(max,active);starts.push(Date.now());pending++;if(pending===1)await gate;active--;},
+    alerts:async()=>{},snapshots:async()=>{snapshots++;}});
+  try{
+    await expect.poll(()=>pending).toBe(1);worker.wake();worker.wake();release();
+    await expect.poll(()=>pending,{timeout:2500}).toBe(2);
+    expect(refreshes).toBe(1);expect(snapshots).toBe(1);expect(max).toBe(1);
+    expect(starts[1]!-starts[0]!).toBeGreaterThanOrEqual(900);
+  }finally{release();await worker.stop();}
+});
+
+it('does not ask browsers to reload owned data when a quote batch changes no resources',async()=>{
+  const listener=await h.appPool.connect();const events:string[]=[];
+  listener.on('notification',message=>{if(message.channel==='paper_market_activity')events.push(message.payload??'');});
+  await listener.query('LISTEN paper_market_activity');let batches=0;
+  const worker=runWorkerLoop(h.appPool,{intervalMs:10000,refresh:async()=>{},pending:async()=>{batches++;},alerts:async()=>{},snapshots:async()=>{}});
+  try{await expect.poll(()=>batches).toBe(1);worker.wake();await expect.poll(()=>batches,{timeout:2500}).toBe(2);await worker.stop();expect(events).toEqual([]);}
+  finally{await worker.stop();await listener.query('UNLISTEN paper_market_activity');listener.release();}
+});
+
 it('compiled worker resumes a durable stop-limit trigger, restarts without duplicate execution, and exits cleanly on SIGTERM',async()=>{
  const id=randomUUID().replaceAll('-','');const user=(await registerUser(h.appPool,{username:id.slice(0,20),email:`${id}@example.com`,password:'unused'},async()=>'unused')).user;
  const instrumentId=(await h.ownerPool.query(`INSERT INTO instruments(symbol,name,exchange,currency,multiplier,kind,tradable,provider) VALUES($1,'Worker','NSE','INR',1,'EQUITY',true,'fixture') RETURNING id`,[id])).rows[0].id;
@@ -41,7 +65,7 @@ it('compiled worker resumes a durable stop-limit trigger, restarts without dupli
   const child=spawn(process.execPath,[fileURLToPath(new URL('../dist/src/worker.js',import.meta.url))],{env:{...process.env,NODE_ENV:'test',DATABASE_URL:url.href,PUBLIC_ORIGIN:'https://paper.example',CSRF_SECRET:'compiled worker test session secret at least32bytes',MARKET_PROVIDER:'fixture'},stdio:['ignore','pipe','pipe']});
   let output='';child.stdout.on('data',chunk=>{output+=String(chunk);});child.stderr.on('data',chunk=>{output+=String(chunk);});
   const exit=new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
-  try{await waitUntil(async()=>output.includes('worker_started')&&await check());child.kill('SIGTERM');expect(await exit).toBe(0);expect(output).toContain('worker_stopped');}
+  try{await waitUntil(async()=>output.includes('worker_started')&&await check()).catch(()=>{throw Error(`Worker process did not make progress: ${output}`);});child.kill('SIGTERM');expect(await exit).toBe(0);expect(output).toContain('worker_stopped');}
   finally{if(child.exitCode===null&&!child.killed)child.kill('SIGKILL');}
  }
  await run(async()=>(await h.appPool.query('SELECT status FROM orders WHERE id=$1',[order.id])).rows[0].status==='FILLED');

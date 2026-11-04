@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { loadConfig } from './platform/config.js';
 import { createPool } from './platform/db.js';
 import { createSafeLogger } from './platform/logging.js';
+import { closeMarketStreams } from './modules/market-data/stream-http.js';
 
 export async function startApi(): Promise<void> {
   const config = loadConfig(process.env);
@@ -30,6 +31,7 @@ export async function startApi(): Promise<void> {
       process.exit(1);
     }, 10000);
     try {
+      await closeMarketStreams(pool);
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       await pool.end();
       logger.info('api_stopped', {});

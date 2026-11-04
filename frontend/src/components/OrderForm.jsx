@@ -1,5 +1,7 @@
 import { useState, useRef, useId } from 'react'
 import { tradingAPI, pendingOrdersAPI } from '../services/api'
+import { useSymbolQuote } from '../hooks/useMarketStream'
+import { mergeQuote } from '../services/quoteStream'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
@@ -24,7 +26,10 @@ const ORDER_TYPES = [
   { id: 'STOP',       label: 'SL-M'   },
 ]
 
-export default function OrderForm({ ticker, price, initialSide = 'buy', onClose, onSuccess }) {
+export default function OrderForm({ ticker, price: initialPrice, initialSide = 'buy', onClose, onSuccess }) {
+  const [streamQuote, setStreamQuote] = useState(null)
+  useSymbolQuote(ticker, packet => setStreamQuote(current => mergeQuote(current, packet)))
+  const price = streamQuote?.price ?? initialPrice
   const formId = useId()
   const { refreshUser }          = useAuth()
   const { formatPrice }          = useRegion()

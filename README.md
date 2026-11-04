@@ -155,6 +155,7 @@ docs/                      Setup, operations, and design documentation
 - [Version history](CHANGELOG.md) — project changes, dependency upgrades, and verification results.
 - [Setup and operations](docs/PERN_SETUP.md) — local configuration, deployment, health checks, and backups.
 - [yfinance paper trading](docs/PERN_YFINANCE.md) — current price policy, service setup, and six-region verification.
+- [Quote streaming](docs/PERN_STREAMING.md) — shared Yahoo feed, UI updates, validation and fallback.
 - [Strict Yahoo validation](docs/PERN_PROVIDER_VALIDATION.md) — historical evaluation of the separate view-only Yahoo adapter.
 - [Provider alternatives](docs/PERN_PROVIDER_RESEARCH.md) — official-source coverage, delays, and evidence still needed for trading.
 - [Known issues and verification](docs/superpowers/plans/2026-11-02-pern-completion-results.md) — test coverage and deferred fixes.

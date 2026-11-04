@@ -21,7 +21,7 @@ api.interceptors.response.use(response=>response,error=>{
   return Promise.reject(error)
 })
 const mapped=(promise,convert)=>promise.then(response=>({...response,data:convert(response.data)}))
-async function instrument(symbol) {
+export async function resolveInstrument(symbol) {
   let item=instrumentForSymbol(symbol)
   if(!item?.id){
     const {data}=await api.get('/instruments',{params:{q:symbol}})
@@ -35,6 +35,7 @@ async function instrument(symbol) {
   }
   return item
 }
+const instrument = resolveInstrument
 async function all(path,params={},maxItems=10000) {
   const items=[];let cursor
   do {
@@ -53,7 +54,7 @@ function notification(item){return {...item,notification_id:item.id,notif_id:ite
 export const authAPI={
   register:(username,email,password)=>api.post('/auth/register',{username,email,password}),
   login:async(username,password)=>{const response=await api.post('/auth/login',{username,password});resetCsrf();return response},
-  me:()=>api.get('/auth/me'),logout:async()=>{await api.post('/auth/logout');resetCsrf()},account:()=>api.get('/account'),
+  me:()=>api.get('/auth/me'),logout:async()=>{await api.post('/auth/logout');resetCsrf();if(typeof window!=='undefined')window.dispatchEvent(new Event('paper:unauthenticated'))},account:()=>api.get('/account'),
 }
 function statisticsDisplay(statistics){
   const values={}
