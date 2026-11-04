@@ -46,8 +46,21 @@ history recovery regression initially clicked the generic Holdings refresh
 button; its selector now targets the labeled history refresh button and the
 focused and complete browser runs pass. `git diff --check` is clean.
 
-Evidence: `/tmp/main-integration-foundation.log`,
+The merge commit `4c15324` retains both streaming histories and has the same
+file tree as the tested feature commit `2166527`. Checks were repeated on that
+merged tree: typecheck, 20 unit and 459 integration tests, 29 frontend tests,
+38 provider tests in the locked market-data image, 6 deployment checks, and
+the full browser workflow with 26 interaction scenarios. Host Python lacks
+`yfinance`, so the host `test:market` command stopped at import; the same
+source passed all provider tests in the project's locked image. The test-only
+screenshots regenerated during verification were restored to their committed
+versions.
+
+Evidence: `/tmp/main-postmerge-verify.log`,
+`/tmp/main-postmerge-provider-container.log`, and
+`/tmp/main-postmerge-deploy-e2e.log`. Pre-merge logs are
+`/tmp/main-integration-foundation.log`,
 `/tmp/main-integration-typecheck.log`, `/tmp/main-integration-web.log`,
 `/tmp/main-integration-python.log`, `/tmp/main-integration-deploy.log`, and
-`/tmp/main-integration-e2e-verified.log`. The integration revision is recorded
-in the final handoff after the main branch is updated.
+`/tmp/main-integration-e2e-verified.log`. The final pushed revision is
+recorded in the handoff.
