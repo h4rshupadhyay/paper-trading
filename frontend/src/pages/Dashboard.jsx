@@ -13,6 +13,7 @@ import { SkeletonCard, SkeletonTable, SkeletonChart } from '../components/Loadin
 import { useActivityRefresh } from '../hooks/useMarketStream'
 import useBackgroundRefresh from '../hooks/useBackgroundRefresh'
 import { portfolioAPI } from '../services/api'
+import { PORTFOLIO_PERIODS, portfolioTick, portfolioTooltipDate } from '../services/portfolioHistory'
 import { useAuth } from '../context/AuthContext'
 import { useRegion, tickerCurrency } from '../context/RegionContext'
 
@@ -32,16 +33,16 @@ function StatCard({ label, value, sub, positive }) {
   )
 }
 
-function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
-  if (loading) return <SkeletonChart />
-  if (!snapshots?.length) return (
+function PortfolioChart({ snapshots, loading, formatCurrency, period, boundaries }) {
+  if (loading) return <div role="status" aria-label="Loading chart">Loading chart…<SkeletonChart /></div>
+  if (snapshots.length < 2) return (
     <div className="chart-empty" style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      Make your first trade to see your portfolio growth chart
+      Not enough samples in this range. Choose a longer range or check back later.
     </div>
   )
 
-  const first = snapshots[0]?.total_value
-  const last  = snapshots[snapshots.length - 1]?.total_value
+  const first = boundaries.firstValue
+  const last  = boundaries.lastValue
   const up    = last >= first
   const color = up ? 'var(--green)' : 'var(--red)'
 
@@ -56,8 +57,8 @@ function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
         </defs>
         <CartesianGrid vertical={false} stroke="var(--border)" />
         <XAxis
-          dataKey="date"
-          tickFormatter={(v) => new Date(v).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          dataKey="time" type="number" scale="time" domain={['dataMin', 'dataMax']}
+          tickFormatter={(v) => portfolioTick(v, period)} minTickGap={35}
           tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           tickLine={false} axisLine={false}
           interval="preserveStartEnd"
@@ -69,7 +70,7 @@ function PortfolioChart({ snapshots, loading, formatCurrency, region }) {
         />
         <Tooltip
           formatter={(v) => [formatCurrency(v), 'Portfolio Value']}
-          labelFormatter={(l) => new Date(l).toLocaleDateString()}
+          labelFormatter={portfolioTooltipDate}
           contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6 }}
         />
         <Area isAnimationActive={false} type="monotone" dataKey="total_value" stroke={color}
@@ -86,6 +87,8 @@ export default function Dashboard() {
 
   const [portfolio, setPortfolio]   = useState(null)
   const [snapshots, setSnapshots]   = useState([])
+  const [period, setPeriod] = useState('5y')
+  const [boundaries, setBoundaries] = useState({ firstValue: null, lastValue: null })
   const [loading, setLoading]       = useState(true)
   const [snapLoading, setSnapLoading] = useState(true)
   const [error, setError]           = useState(null)
@@ -110,21 +113,26 @@ export default function Dashboard() {
   useActivityRefresh(() => fetchPortfolio({ background: true }), portfolio?.holdings?.map(item => item.instrumentId) ?? [], true)
   useBackgroundRefresh(() => fetchPortfolio({ background: true }))
 
-  const fetchSnapshots = useCallback(async () => {
+  const snapshotVersion = useRef(0)
+  const fetchSnapshots = useCallback(async (selectedPeriod = period) => {
+    const version = ++snapshotVersion.current
     setSnapLoading(true)
+    setHistoryError(null)
     try {
-      const { data } = await portfolioAPI.snapshots(730)
+      const { data } = await portfolioAPI.history(selectedPeriod)
+      if (version !== snapshotVersion.current) return
       setSnapshots(data.snapshots || [])
-      setHistoryError(null)
+      setBoundaries(data)
     } catch (e) {
-      setHistoryError(e.response?.data?.error || 'Failed to load portfolio history')
-    } finally { setSnapLoading(false) }
-  }, [])
+      if (version === snapshotVersion.current) setHistoryError(e.response?.data?.error || 'Failed to load portfolio history. Try Refresh.')
+    } finally { if (version === snapshotVersion.current) setSnapLoading(false) }
+  }, [period])
 
+  useEffect(() => { fetchPortfolio() }, [fetchPortfolio])
   useEffect(() => {
-    fetchPortfolio()
-    fetchSnapshots()
-  }, [fetchPortfolio, fetchSnapshots])
+    fetchSnapshots(period)
+    return () => { snapshotVersion.current++ }
+  }, [fetchSnapshots, period])
 
   const fmt  = (n) => formatCurrency(n)              // account values (balance, totals)
   const fmtp = (n, ticker) => formatPrice(n, { from: tickerCurrency(ticker) })
@@ -173,14 +181,22 @@ export default function Dashboard() {
 
         {/* Portfolio growth chart */}
         <section className="card chart-section">
-          <div className="card-header">
+          <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
             <h2 className="card-title">Portfolio Growth</h2>
-            <button className="icon-btn" onClick={fetchSnapshots} title="Refresh">
-              <RefreshCw size={15} />
-            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', maxWidth: '100%' }}>
+              <div className="period-tabs" role="group" aria-label="Portfolio history range" style={{ flexWrap: 'wrap' }}>
+                {PORTFOLIO_PERIODS.map(p => (
+                  <button key={p.value} className={`period-btn ${period === p.value ? 'active' : ''}`}
+                    aria-pressed={period === p.value} onClick={() => setPeriod(p.value)}>{p.label}</button>
+                ))}
+              </div>
+              <button className="icon-btn" onClick={() => fetchSnapshots(period)} title="Refresh" aria-label="Refresh portfolio history">
+                <RefreshCw size={15} />
+              </button>
+            </div>
           </div>
-          {historyError && <div className="error-banner" role="alert">{historyError}</div>}
-          <PortfolioChart snapshots={snapshots} loading={snapLoading} formatCurrency={formatCurrency} region={region} />
+          {historyError ? <div className="error-banner" role="alert">{historyError}</div> :
+            <PortfolioChart snapshots={snapshots} loading={snapLoading} formatCurrency={formatCurrency} period={period} boundaries={boundaries} />}
         </section>
 
         {/* Holdings table */}

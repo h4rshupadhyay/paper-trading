@@ -4,6 +4,8 @@ Scope: active React/Express/PostgreSQL application, market-data sidecar, worker 
 
 The later [internal API refresh follow-up](INTERNAL_API_REFRESH_2026-11-04.md) adds UI-029–UI-034 for immediate confirmed writes, notification synchronisation, quieter visible-tab polling and response-order protection.
 
+The [same-app demo seed](DEMO_USER_2026-11-04.md) adds an explicit idempotent demo-user command, isolated financial fixtures and UI-035 normal-login coverage. Its synthetic history never replaces shared market observations.
+
 ## How to read the map
 
 `B` = browser interaction with real application/database; `H` = HTTP integration; `L` = service/database logic; `P` = Python sidecar; `D` = real Docker/Compose interface. Existing browser suites deliberately delay or fail selected HTTP responses to cover recovery/races. Those injected responses do not establish real Yahoo availability. The older `completeness.audit.ts` confirms historical defects and is **not** a correctness gate; `completeness.browser.e2e.ts` contains the repaired-behavior regressions.

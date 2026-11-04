@@ -41,6 +41,139 @@ class ServiceTests(unittest.TestCase):
         self.addCleanup(self.patcher.stop)
         self.addCleanup(self.service.executor.shutdown, wait=True)
         FakeTicker.metadata = copy.deepcopy(META)
+    def test_demo_history_excludes_incomplete_sessions_and_preserves_fx_direction(self):
+        now = datetime(2026, 11, 4, 5, 0, tzinfo=timezone.utc)
+        def load(requested, period='5d', interval='1d'):
+            zone = 'Asia/Kolkata' if requested == 'RELIANCE.NS' else 'America/New_York' if requested != 'USDINR=X' else 'Europe/London'
+            frame = pd.DataFrame({'Close':[100.125,101.25,102.5], 'Dividends':[0,0,0], 'Stock Splits':[0,0,0]}, index=pd.date_range('2026-11-02', periods=3, tz=zone))
+            return dict(symbol=requested,currency='INR' if requested in ('RELIANCE.NS','USDINR=X') else 'USD',instrumentType='CURRENCY' if requested=='USDINR=X' else 'EQUITY'), frame
+        with patch.object(self.service, 'load', load):
+            result = self.service.demo_history(now)
+        self.assertEqual(result['source'], 'yfinance')
+        self.assertEqual([b['sessionDate'] for b in result['series']['AAPL']['items']], ['2026-11-02','2026-11-03'])
+        self.assertEqual(result['series']['AAPL']['items'][-1]['closedAt'], '2026-11-03T21:00:00Z')
+        self.assertEqual(result['series']['AAPL']['items'][-1]['availableAt'], '2026-11-04T05:00:00Z')
+        self.assertEqual(result['series']['USDINR=X']['currency'], 'INR')
+        self.assertEqual(result['series']['AAPL']['items'][0]['close'], '100.13')
+        with patch.object(self.service, 'load', lambda *args: ({'symbol':'INRUSD=X','currency':'USD'},load('USDINR=X')[1])):
+            with self.assertRaises(app.Unavailable): self.service.demo_history(now)
+
+    def test_demo_history_refuses_actions_even_on_an_unfinished_session(self):
+        now = datetime(2026, 11, 4, 5, 0, tzinfo=timezone.utc)
+        def load(requested, *args):
+            zone='Asia/Kolkata' if requested=='RELIANCE.NS' else 'Europe/London' if requested=='USDINR=X' else 'America/New_York'
+            frame=pd.DataFrame({'Close':[100,50], 'Dividends':[0,0], 'Stock Splits':[0,2 if requested=='AAPL' else 0]},index=pd.date_range('2026-11-03',periods=2,tz=zone))
+            return dict(symbol=requested,currency='USD' if requested in ('AAPL','MSFT') else 'INR',instrumentType='CURRENCY' if requested=='USDINR=X' else 'EQUITY'),frame
+        with patch.object(self.service,'load',load):
+            with self.assertRaises(app.Unavailable): self.service.demo_history(now)
+
+    def test_demo_history_refuses_actions_missing_history_and_bad_prices(self):
+        now = datetime(2026, 11, 4, 5, 0, tzinfo=timezone.utc)
+        base = pd.DataFrame({'Close':[100], 'Dividends':[0], 'Stock Splits':[0]},index=pd.date_range('2026-11-02',periods=1,tz='America/New_York'))
+        for field, value in [('Dividends',1),('Stock Splits',2),('Close',float('nan'))]:
+            frame = base.copy(); frame[field] = value
+            with patch.object(self.service,'load',return_value=({'symbol':'AAPL','currency':'USD','instrumentType':'EQUITY'},frame)):
+                with self.assertRaises(app.Unavailable): self.service.demo_history(now)
+        with patch.object(self.service,'load',return_value=({'symbol':'AAPL','currency':'USD','instrumentType':'EQUITY'},base.iloc[:0])):
+            with self.assertRaises(app.Unavailable): self.service.demo_history(now)
+
+    def five_year_load(self, requested, period='5d', interval='1d'):
+        if period != '5y' or interval != '1d':
+            raise AssertionError('five-year export must fetch actual daily five-year data')
+        zone = 'Asia/Kolkata' if requested == 'RELIANCE.NS' else 'Europe/London' if requested == 'USDINR=X' else 'America/New_York'
+        frame = pd.DataFrame({'Close':[50, 55, 110], 'Dividends':[0.5, 0.25, 1], 'Stock Splits':[0, 2, 0]},
+                             index=pd.to_datetime(['2024-10-25','2024-10-28','2026-11-03']).tz_localize(zone))
+        if requested == 'USDINR=X':
+            frame['Dividends'] = 0; frame['Stock Splits'] = 0
+        return dict(symbol=requested, currency='USD' if requested in ('AAPL','MSFT') else 'INR',
+                    instrumentType='CURRENCY' if requested == 'USDINR=X' else 'EQUITY'), frame
+
+    def test_five_year_bundle_restores_exclusive_future_split_units_and_dates(self):
+        with patch.object(self.service, 'load', self.five_year_load):
+            result = self.service.demo_history(datetime(2026,11,4,5,tzinfo=timezone.utc), period='5y')
+        self.assertEqual(set(result), {'version','source','priceBasis','fetchedAt','series'})
+        self.assertEqual((result['version'],result['source'],result['priceBasis']), (3,'yfinance','contemporaneous'))
+        self.assertEqual(result['series']['AAPL']['items'], [
+            dict(sessionDate='2024-10-25',closedAt='2024-10-25T20:00:00Z',availableAt='2024-10-26T04:00:00Z',close='100.00000000',dividend='1.00000000',split='1'),
+            dict(sessionDate='2024-10-28',closedAt='2024-10-28T20:00:00Z',availableAt='2024-10-29T04:00:00Z',close='55.00000000',dividend='0.25000000',split='2'),
+            dict(sessionDate='2026-11-03',closedAt='2026-11-03T21:00:00Z',availableAt='2026-11-04T05:00:00Z',close='110.00000000',dividend='1.00000000',split='1')])
+        self.assertEqual(result['series']['USDINR=X']['items'][0], dict(sessionDate='2024-10-25',closedAt='2024-10-25T23:00:00Z',availableAt='2024-10-25T23:00:00Z',close='50.00000000',dividend='0',split='1'))
+        self.assertEqual(result['series']['RELIANCE.NS']['items'][0]['closedAt'],'2024-10-25T10:00:00Z')
+
+    def test_five_year_preserves_source_special_sessions_and_eight_decimal_units(self):
+        def load(requested,*args):
+            meta,frame = self.five_year_load(requested,'5y','1d')
+            if requested == 'RELIANCE.NS':
+                frame = pd.DataFrame({'Close':[Decimal('123.12345678')], 'Dividends':[Decimal('0.12345678')], 'Stock Splits':[0]},
+                                     index=pd.to_datetime(['2023-11-12']).tz_localize('Asia/Kolkata'))
+            return meta,frame
+        with patch.object(self.service,'load',load):
+            result = self.service.demo_history(datetime(2026,11,4,5,tzinfo=timezone.utc),period='5y')
+        row = result['series']['RELIANCE.NS']['items'][0]
+        self.assertEqual(row['sessionDate'],'2023-11-12')
+        self.assertEqual(row['close'],'123.12345678')
+        self.assertEqual(row['dividend'],'0.12345678')
+
+    def test_five_year_refuses_unfinished_split_or_dividend_to_avoid_unreplayed_live_actions(self):
+        for action in ('Stock Splits', 'Dividends'):
+            def load(requested, *args):
+                meta, frame = self.five_year_load(requested, '5y', '1d')
+                frame = frame.iloc[-1:].copy()
+                if requested == 'AAPL':
+                    frame.loc[pd.Timestamp('2026-11-04',tz=frame.index.tz)] = [float('nan'),0,0]
+                    frame.loc[frame.index[-1],action] = 2
+                return meta, frame
+            with self.subTest(action=action), patch.object(self.service, 'load', load):
+                with self.assertRaises(app.Unavailable):
+                    self.service.demo_history(datetime(2026,11,4,5,tzinfo=timezone.utc), period='5y')
+
+    def test_five_year_omits_unfinished_action_free_price(self):
+        def load(requested,*args):
+            meta,frame = self.five_year_load(requested,'5y','1d')
+            if requested == 'AAPL':
+                frame.loc[pd.Timestamp('2026-11-04',tz=frame.index.tz)] = [float('nan'),0,0]
+            return meta,frame
+        with patch.object(self.service,'load',load):
+            result = self.service.demo_history(datetime(2026,11,4,5,tzinfo=timezone.utc),period='5y')
+        self.assertEqual(result['series']['AAPL']['items'][-1]['sessionDate'],'2026-11-03')
+        self.assertEqual(result['series']['AAPL']['items'][-1]['close'],'110.00000000')
+
+    def test_five_year_rejects_bad_actions_capital_gains_timezone_fx_and_oversized_history(self):
+        now = datetime(2026,11,4,5,tzinfo=timezone.utc)
+        mutations = [lambda m,f: f.assign(Dividends=-1), lambda m,f: f.assign(**{'Stock Splits':float('nan')}),
+                     lambda m,f: f.assign(**{'Stock Splits':-2}), lambda m,f: f.assign(**{'Capital Gains':1}),
+                     lambda m,f: f.assign(Close=0), lambda m,f: f.tz_convert('UTC'),
+                     lambda m,f: f.assign(**{'Rights':1}),
+                     lambda m,f: pd.concat([f,f]), lambda m,f: f.drop(columns=['Dividends']),
+                     lambda m,f: pd.concat([f.iloc[:1]]*1401)]
+        for mutate in mutations:
+            def load(requested, *args):
+                meta, frame = self.five_year_load(requested,'5y','1d')
+                return meta, mutate(meta,frame)
+            with self.subTest(mutate=mutate), patch.object(self.service,'load',load):
+                with self.assertRaises(app.Unavailable): self.service.demo_history(now,period='5y')
+        for field,value in [('symbol','INRUSD=X'),('currency','USD')]:
+            def load(requested,*args):
+                meta, frame = self.five_year_load(requested,'5y','1d')
+                if requested == 'USDINR=X': meta[field] = value
+                return meta,frame
+            with patch.object(self.service,'load',load):
+                with self.assertRaises(app.Unavailable): self.service.demo_history(now,period='5y')
+        def fx_action(requested,*args):
+            meta,frame = self.five_year_load(requested,'5y','1d')
+            if requested == 'USDINR=X': frame['Dividends'] = 1
+            return meta,frame
+        with patch.object(self.service,'load',fx_action):
+            with self.assertRaises(app.Unavailable): self.service.demo_history(now,period='5y')
+
+    def test_demo_history_route_selects_version_and_validates_period(self):
+        with patch.object(self.service,'load',self.five_year_load):
+            status,result = app.route(self.service,'/demo-history?period=5y')
+        self.assertEqual(status,200)
+        self.assertEqual(result['version'],3)
+        for target in ['/demo-history?period=1y','/demo-history?period=','/demo-history?period=5y&period=5y','/demo-history?period=5y&symbol=AAPL']:
+            self.assertEqual(app.route(self.service,target)[0],400)
+
     def test_statistics_preserve_zero_signed_pe_and_raw_units(self):
         info = dict(symbol='VOD.L', currency='GBp', open=123.5, dayHigh=125, dayLow=120,
                     previousClose=122, volume=0, averageVolume=9007199254740993,

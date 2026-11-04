@@ -1,3 +1,4 @@
+import { adaptPortfolioHistory } from './portfolioHistory.js'
 import axios from 'axios'
 import { rememberInstrument, instrumentForSymbol, displayNumber, orderIntent, adaptPortfolio, adaptOrder, orderRejectionMessage } from './contracts.js'
 
@@ -17,7 +18,7 @@ api.interceptors.response.use(response=>response,error=>{
     error.response.data.code=error.response.data.error.code
     error.response.data.error=error.response.data.error.message
   }
-  if(error.response?.status===401){resetCsrf();window.dispatchEvent(new Event('paper:unauthenticated'))}
+  if(error.response?.status===401){resetCsrf();if(typeof window!=='undefined')window.dispatchEvent(new Event('paper:unauthenticated'))}
   return Promise.reject(error)
 })
 const mapped=(promise,convert)=>promise.then(response=>({...response,data:convert(response.data)}))
@@ -107,7 +108,7 @@ export const tradingAPI={
     return {data:{orders:data.items.map(adaptOrder),total:(page-1)*limit+data.items.length,pages:data.nextCursor?page+1:page}}
   },
 }
-export const portfolioAPI={get:()=>mapped(api.get('/portfolio'),adaptPortfolio),
+export const portfolioAPI={history:period=>mapped(api.get('/portfolio/history',{params:{period}}),adaptPortfolioHistory),get:()=>mapped(api.get('/portfolio'),adaptPortfolio),
   snapshots:async days=>({data:{snapshots:(await all('/portfolio/snapshots',{days},Infinity)).reverse().map(item=>({
     ...item,snapshot_at:item.sampledAt,timestamp:item.sampledAt,date:item.sampledAt,total_value:displayNumber(item.totalValue),cash_balance:displayNumber(item.cashValue??item.cashBalance),holdings_value:displayNumber(item.holdingsValue)}))}})}
 export const watchlistAPI={

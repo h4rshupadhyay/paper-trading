@@ -59,6 +59,26 @@ docker compose --env-file .env.pern-compose.local down
 
 This preserves the database volume. Adding `--volumes` deletes its stored data.
 
+### Demo user with populated data
+
+Create a demo user in the **same running app and database**:
+
+```bash
+docker compose --env-file .env.pern-compose.local build api
+docker compose --env-file .env.pern-compose.local run --rm --no-deps api \
+  node apps/server/dist/src/platform/seed-demo.js
+```
+
+The command prints username **`demo`** and a generated password on first creation. Sign in normally at **http://localhost:3000**. New demo accounts now have **five years** of quarterly paper trades backed by actual yfinance daily prices and USD/INR history, with split and dividend records, watchlists, pending orders and provenance notes. Cash and holdings are computed from the replay and vary with provider observations.
+
+The Dashboard **Portfolio Growth** and Analytics charts default to **5Y**, with **1D / 5D / 1M / 3M / 6M / 1Y / 5Y** selectors like the stock page. Long ranges show year-aware dates. The API returns bounded monthly, weekly or daily samples instead of downloading every raw snapshot. Short ranges show only existing observations; historical intraday paths are not fabricated.
+
+Historical executions remain simulated. The source's split-normalized prices/dividends are restored to contemporaneous share units before applying splits. Dividends are **gross simulated ex-date cash credits**, not actual payable-date records; no withholding or reinvestment is assumed. RELIANCE is first held after its July 2023 JFSL demerger, avoiding an unsupported entitlement. Source validation fails without complete history or when a current session's corporate action is unfinished. Backfilled samples are marked stale. Current valuations use the normal provider. Running seed again preserves credentials and subsequent activity; production seeding is refused.
+
+For the existing provider-based v2 demo, use the compiled CLI with `--upgrade` (five years is now the default), explicitly supplying `DEMO_UPGRADE_DATABASE_URL` through the environment with the database **owner maintenance role** and `DEMO_PRIOR_HISTORY_PATH` pointing to its retained v2 provider source/backup artifact. Use `-e DEMO_UPGRADE_DATABASE_URL`, `-e DEMO_PRIOR_HISTORY_PATH` and a private persistent directory mounted at `DEMO_BACKUP_DIR` in Compose. Do not put credentials in command arguments or commit them. Stop the worker briefly; the upgrade fences its batch lock and verifies the exact original v2 financial records before replacing them atomically. It saves a mode-0600 backup including old rows and the new source bundle before mutation. Passwords, sessions, user resources and cancellation decisions are preserved; additional user trades or changed accounting cause refusal. A durable version manifest makes repeats no-ops. `--one-month` retains the prior one-month seed and v1→v2 maintenance path. See the [five-year verification report](docs/testing/FIVE_YEAR_DEMO_2026-11-04.md).
+
+For a chosen initial password, pass `-e DEMO_PASSWORD` to `docker compose run` after exporting it in your shell. For non-Docker development, load your normal development environment and run `npm run seed:demo`.
+
 ## Trading rules
 
 - Accounts use INR; changing the display currency does not change the account balance.
