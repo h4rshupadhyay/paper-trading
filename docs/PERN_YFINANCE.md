@@ -13,7 +13,7 @@
 
 ## Docker
 
-Follow the [README](../README.md#getting-started). The private `market-data` service runs yfinance1.7.0 on Python3.12 as a non-root user. It receives no database credentials and publishes no host port. API and worker use `http://market-data:8000` and wait for service health.
+Follow the [README](../README.md#getting-started). The private `market-data` service runs yfinance 1.8.0 on Python 3.12 as a non-root user. It receives no database credentials and publishes no host port. API and worker use `http://market-data:8000` and wait for service health.
 
 The bridge shares a two-request upstream concurrency limit across API and worker, uses short caches and bounded timeouts, and rejects excess requests without queueing them. It does not guarantee fresh receipts for an arbitrarily large active portfolio. External provider failures leave cached observations intact; expired receipts prevent further fills.
 
